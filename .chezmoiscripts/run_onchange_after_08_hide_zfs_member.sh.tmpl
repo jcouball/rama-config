@@ -1,0 +1,40 @@
+#!/bin/bash
+#
+# Keep ZFS pool members out of the dock and the Files sidebar.
+#
+# On a ZFS-on-root install the partition holding the root pool carries the
+# pool's name as its label, so the desktop lists it as an unmounted volume
+# called "rpool". Clicking it fails with "Failed to mount": a pool member is
+# not a filesystem udisks can mount, and the pool is already imported. The
+# udev rule below tells udisks to ignore every such partition.
+#
+# The rule matches nothing on a machine without ZFS, so it is installed
+# everywhere.
+
+set -euo pipefail
+
+if [ "$(id -u)" -eq 0 ]; then
+  echo "❌ Do not run 'sudo chezmoi apply'." >&2
+  echo "   Instead:  sudo -v && chezmoi apply" >&2
+  exit 1
+fi
+
+RULE_FILE=/etc/udev/rules.d/99-hide-zfs-member.rules
+RULE='SUBSYSTEM=="block", ENV{ID_FS_TYPE}=="zfs_member", ENV{UDISKS_IGNORE}="1"'
+
+if [ -f "$RULE_FILE" ] && [ "$(cat "$RULE_FILE")" = "$RULE" ]; then
+  echo ">> The udev rule hiding ZFS pool members is already installed."
+  exit 0
+fi
+
+if ! sudo -n true 2>/dev/null && [ ! -t 0 ]; then
+  echo "❌ Installing a udev rule needs sudo, and there is no terminal to prompt on." >&2
+  echo "   Run 'sudo -v' first, then 'chezmoi apply' -- NOT 'sudo chezmoi apply'." >&2
+  exit 1
+fi
+
+echo ">> Installing $RULE_FILE..."
+echo "$RULE" | sudo tee "$RULE_FILE" >/dev/null
+sudo udevadm control --reload
+sudo udevadm trigger --subsystem-match=block
+echo ">> Done. If the dock still shows the volume, log out and back in."
