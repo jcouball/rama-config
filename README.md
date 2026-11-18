@@ -82,6 +82,7 @@ Afterwards, by hand:
 4. Run `claude` and `gh auth login` to sign in to each.
 5. Sign in to VS Code with GitHub and turn on Settings Sync.
 6. Sign in to mail in Thunderbird, and set View > Layout to Classic View.
+7. Sign in to Telegram: scan its QR code from the phone app.
 
 ## What installs what
 

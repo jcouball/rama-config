@@ -8,3 +8,6 @@
 # Mail. Published by Canonical, not Mozilla. The archive's thunderbird package
 # is a shim that installs this same snap.
 thunderbird
+
+# Messaging, used for Saved Messages. Published by Telegram. Not in the archive.
+telegram-desktop
