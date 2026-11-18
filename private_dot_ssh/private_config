@@ -1,8 +1,11 @@
-# Outbound connections from rama. Inbound access is ~/.ssh/authorized_keys,
-# which this repo does not manage.
+# Outbound connections from rama. Inbound access is authorized_keys, beside
+# this file.
+
+# No ForwardAgent here: a forwarded agent lets the remote host use every loaded
+# key for as long as the session lasts. Turn it on per host, in a Host block
+# above this one, for a host that needs it.
 
 Host *
-  ForwardAgent yes
   ServerAliveInterval 60
   StrictHostKeyChecking no
   CASignatureAlgorithms +ssh-rsa

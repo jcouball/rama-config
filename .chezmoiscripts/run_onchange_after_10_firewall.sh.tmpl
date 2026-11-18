@@ -1,0 +1,74 @@
+#!/bin/bash
+#
+# Turn on the firewall, with inbound connections blocked except for the rules
+# in ufw-rules.txt.
+#
+# ufw is Ubuntu's firewall and is installed but off. Without it sshd answers on
+# every network rama joins. The rules are added before the firewall is enabled,
+# so an apply over ssh keeps its connection.
+#
+# The list is embedded below, so editing ufw-rules.txt changes this script and
+# run_onchange_ re-runs it. A rule already present is left alone. A rule
+# deleted from the list is not removed: see "Close a port" in the README.
+#
+# Docker publishes ports with its own packet-filter rules, ahead of ufw's, so
+# `docker run -p 8080:80` is reachable whatever this script sets.
+
+set -euo pipefail
+
+if [ "$(id -u)" -eq 0 ]; then
+  echo "❌ Do not run 'sudo chezmoi apply'." >&2
+  echo "   Instead:  sudo -v && chezmoi apply" >&2
+  exit 1
+fi
+
+rules=()
+while IFS= read -r line; do
+  case "$line" in
+    ''|\#*) continue ;;
+  esac
+  rules+=("$line")
+done <<'EOF_RULES'
+{{ include "ufw-rules.txt" -}}
+EOF_RULES
+
+# A typo here would otherwise run some other ufw command, such as `disable`.
+for rule in "${rules[@]}"; do
+  case "$rule" in
+    'allow '*|'limit '*) ;;
+    *)
+      echo "❌ ufw-rules.txt: a rule must start with allow or limit: $rule" >&2
+      exit 1
+      ;;
+  esac
+done
+
+# ufw loads rules into the kernel, which a container does not allow.
+if ! command -v ufw >/dev/null || [ ! -d /run/systemd/system ]; then
+  echo ">> Skipping the firewall: ufw cannot run here."
+  exit 0
+fi
+
+if ! sudo -n true 2>/dev/null && [ ! -t 0 ]; then
+  echo "❌ Configuring the firewall needs sudo, and there is no terminal to prompt on." >&2
+  echo "   Run 'sudo -v' first, then 'chezmoi apply' -- NOT 'sudo chezmoi apply'." >&2
+  exit 1
+fi
+
+echo ">> Setting the firewall defaults: inbound blocked, outbound allowed..."
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+
+echo ">> Adding ${#rules[@]} firewall rules..."
+for rule in "${rules[@]}"; do
+  # Split the line into ufw's arguments.
+  read -r -a args <<<"$rule"
+  sudo ufw "${args[@]}"
+done
+
+# --force skips the prompt about disrupting ssh connections. The ssh rule is
+# already in place.
+sudo ufw --force enable
+
+# The rules as the firewall has them, including any that are not in the list.
+sudo ufw status verbose

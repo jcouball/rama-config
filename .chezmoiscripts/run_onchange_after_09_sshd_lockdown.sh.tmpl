@@ -1,0 +1,160 @@
+#!/bin/bash
+#
+# Restrict sshd to key logins with no forwarding.
+#
+# Ubuntu's sshd accepts the account password. A session logs in as a user with
+# sudo and docker, so this script installs sshd-rama.conf as a drop-in that
+# allows public keys alone, from ~/.ssh/authorized_keys, which chezmoi writes
+# from private_dot_ssh/private_authorized_keys.
+#
+# THE `after_` ATTRIBUTE IS REQUIRED. Passwords go off here, so the key file
+# has to be in place first, and chezmoi writes it before `after_` scripts run.
+#
+# THE DROP-IN IS CHECKED IN PLACE AND ROLLED BACK. `sshd -t` has to accept it,
+# and `sshd -T` has to report the settings it is for. A drop-in that sorts
+# ahead of this one could set a keyword first, and sshd keeps the first value.
+# If either check fails, the previous file goes back (or the new one is
+# removed) and the apply fails, so the script runs again on the next one.
+#
+# A reload does not end open sessions: each has its own sshd process. So an
+# apply over ssh finishes. A key change needs no reload: sshd reads the key
+# file on every login.
+#
+# The files are embedded or hashed below, so editing either re-runs this.
+# key file hash: {{ include "private_dot_ssh/private_authorized_keys" | sha256sum }}
+
+set -euo pipefail
+
+if [ "$(id -u)" -eq 0 ]; then
+  echo "❌ Do not run 'sudo chezmoi apply'." >&2
+  echo "   Instead:  sudo -v && chezmoi apply" >&2
+  exit 1
+fi
+
+SSHD=/usr/sbin/sshd
+TARGET=/etc/ssh/sshd_config.d/00-rama.conf
+KEYS="$HOME/.ssh/authorized_keys"
+USER_NAME="$(id -un)"
+
+if [ ! -x "$SSHD" ]; then
+  echo ">> Skipping the sshd drop-in: $SSHD is not installed."
+  exit 0
+fi
+
+if ! sudo -n true 2>/dev/null && [ ! -t 0 ]; then
+  echo "❌ Configuring sshd needs sudo, and there is no terminal to prompt on." >&2
+  echo "   Run 'sudo -v' first, then 'chezmoi apply' -- NOT 'sudo chezmoi apply'." >&2
+  exit 1
+fi
+
+# The key lines. A line is options, a key type and the key, so three fields at
+# least, and the options must be exactly `restrict` or `restrict,pty`. Any
+# other line is named at the end and fails the apply: chezmoi has already
+# written it to the key file, so a line with other options is live until it is
+# fixed.
+key_count=0
+rejected=()
+if [ -f "$KEYS" ]; then
+  while IFS= read -r line; do
+    case "$line" in
+      ''|\#*) continue ;;
+    esac
+    read -r -a fields <<<"$line"
+    if [ "${#fields[@]}" -ge 3 ] &&
+       { [ "${fields[0]}" = restrict ] || [ "${fields[0]}" = restrict,pty ]; } &&
+       [[ "${fields[1]}" =~ ^(ssh-|ecdsa-|sk-) ]]; then
+      key_count=$((key_count + 1))
+    else
+      rejected+=("$line")
+    fi
+  done <"$KEYS"
+fi
+
+new="$(mktemp)"
+backup="$(mktemp)"
+trap 'rm -f "$new" "$backup"' EXIT
+cat >"$new" <<'EOF_SSHD'
+{{ include "sshd-rama.conf" -}}
+EOF_SSHD
+
+had_previous=false
+if sudo test -f "$TARGET"; then
+  had_previous=true
+  sudo cat "$TARGET" >"$backup"
+fi
+
+restore() {
+  if [ "$had_previous" = true ]; then
+    sudo install -m 0644 -o root -g root "$backup" "$TARGET"
+    echo "   Restored the previous $TARGET." >&2
+  else
+    sudo rm -f "$TARGET"
+    echo "   Removed $TARGET." >&2
+  fi
+}
+
+echo ">> Installing $TARGET..."
+sudo install -m 0644 -o root -g root "$new" "$TARGET"
+
+# `sshd -t` needs the privilege separation directory, which exists only once
+# systemd has made it.
+sudo mkdir -p /run/sshd
+
+if ! sudo "$SSHD" -t; then
+  echo "❌ sshd -t rejects the configuration with the new drop-in." >&2
+  restore
+  exit 1
+fi
+
+# What sshd will use for this account, not the text of the file. Compared
+# without regard to case: sshd prints the keywords in lower case in some
+# versions and as written in the manual in others.
+effective="$(sudo "$SSHD" -T -C "user=$USER_NAME,host=client,addr=192.168.0.2")"
+wrong=()
+for want in \
+  'authenticationmethods publickey' \
+  'pubkeyauthentication yes' \
+  'passwordauthentication no' \
+  'kbdinteractiveauthentication no' \
+  'permitrootlogin no' \
+  'disableforwarding yes' \
+  'authorizedkeysfile .ssh/authorized_keys'; do
+  grep -qixF "$want" <<<"$effective" || wrong+=("$want")
+done
+if [ "${#wrong[@]}" -gt 0 ]; then
+  echo "❌ sshd does not report these settings with the drop-in installed:" >&2
+  printf '     %s\n' "${wrong[@]}" >&2
+  echo "   Another file in /etc/ssh/sshd_config.d probably sets them first." >&2
+  restore
+  exit 1
+fi
+
+# A running sshd keeps the config it read at start. Ubuntu starts sshd from a
+# socket on the first connection, so it may not be running, and then there is
+# nothing to reload. Skipped where systemd is not running, such as a container.
+#
+# The daemon-reload is for systemctl's warning that units changed on disk.
+# snapd adds a mount unit's links after its own daemon-reload whenever it
+# installs or refreshes a snap, and systemd then reports every unit as stale,
+# ssh.service included. Rereading the unit files restarts nothing.
+if [ -d /run/systemd/system ]; then
+  sudo systemctl daemon-reload
+  sudo systemctl try-reload-or-restart ssh.service
+fi
+
+echo ">> sshd accepts public keys only, with forwarding off."
+
+if [ "${#rejected[@]}" -gt 0 ]; then
+  echo "❌ These lines in $KEYS have options other than exactly restrict or" >&2
+  echo "   restrict,pty, or are not a whole key. Fix them in" >&2
+  echo "   private_dot_ssh/private_authorized_keys and apply again:" >&2
+  printf '     %s\n' "${rejected[@]}" >&2
+  exit 1
+fi
+
+if [ "$key_count" -eq 0 ]; then
+  echo "⚠️  No key lines in $KEYS, so nobody can log in over ssh." >&2
+  echo "   Add rama's public key (README, \"Replace the key\") and apply again." >&2
+else
+  echo ">> $key_count key(s) authorized in $KEYS."
+fi

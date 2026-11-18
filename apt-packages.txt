@@ -17,6 +17,7 @@ git
 # Shell and remote access
 zsh
 openssh-server
+ufw
 
 # General
 ca-certificates

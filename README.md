@@ -62,8 +62,8 @@ sudo -v && sh -c "$(curl -fsLS get.chezmoi.io)" -- -b /tmp/chezmoi-bootstrap \
 Step 2 downloads a temporary copy of chezmoi and runs it. It asks what the
 machine is called, then installs the apt packages, changes the login shell to
 zsh, registers the vendor apt repositories, writes the config files, installs
-the mise runtimes and tools, installs the VS Code extensions, and installs any
-snaps listed.
+the mise runtimes and tools, installs the VS Code extensions, installs any
+snaps listed, restricts sshd to key logins, and turns on the firewall.
 
 The temporary chezmoi in `/tmp` is only for this first run. mise installs the
 permanent one.
@@ -74,8 +74,8 @@ where they need it.
 
 Afterwards, by hand:
 
-1. Add the public keys of the machines that will drive rama to
-   `~/.ssh/authorized_keys`.
+1. Give the machines that will drive rama the key: see
+   [Set up a client](#set-up-a-client).
 2. Log out and back in so the login shell change and the `docker` group
    membership take effect.
 3. Log into 1Password.
@@ -176,6 +176,136 @@ does so with mise's shims directory.
 Interactive shells also run `mise activate` from `.zshrc`, which manages `PATH`
 directly and applies a project's own `mise.toml` or `.tool-versions` on `cd`.
 
+## Remote access over SSH
+
+Other machines on the LAN run commands and tests on rama over ssh. A session
+logs in as `james`, who has sudo and is in the `docker` group, so a login is
+close to root access. Three things limit who gets one, the same three
+[sophon-config](https://github.com/jcouball/sophon-config) uses:
+
+- **Keys only.** [sshd-rama.conf](sshd-rama.conf) is installed as
+  `/etc/ssh/sshd_config.d/00-rama.conf`. It allows public keys alone, so the
+  account password does not open a session, and it refuses root.
+- **Keys from this repo.** chezmoi writes `~/.ssh/authorized_keys` from
+  [private_dot_ssh/private_authorized_keys](private_dot_ssh/private_authorized_keys).
+  Each line must start with `restrict` or `restrict,pty`; script 09 fails the
+  apply on any other.
+- **LAN only.** ufw blocks every inbound connection except the rules in
+  [ufw-rules.txt](ufw-rules.txt), which allow port 22 from `192.168.0.0/16`
+  and from IPv6 link-local addresses.
+
+Forwarding is off: `DisableForwarding yes` covers ports, the agent, X11, and
+tunnels, and no key option can turn it back on. Use `scp` or `sftp` to move
+files; both still work.
+
+There is one key for rama, `id_ed25519_rama`, used for rama alone. Its private
+half is kept in 1Password as an SSH Key item of the same name, and every
+client holds a copy. Each copy should have a passphrase, so a copy of the key
+file is useless on its own. Nothing here can enforce that.
+
+**The firewall does not cover Docker.** Docker publishes ports with its own
+packet-filter rules, which run ahead of ufw's, so `docker run -p 8080:80` is
+reachable from the network whatever `ufw-rules.txt` says. To keep a container
+private, publish it on the loopback address: `-p 127.0.0.1:8080:80`.
+
+**The firewall blocks everything else inbound.** A dev server, PostgreSQL, or
+Redis on rama is unreachable from another machine until it has a rule: see
+[Open a port](#open-a-port). Connections from rama to itself, outbound
+connections, ping, and `rama.local` name lookups need no rule.
+
+### Set up a client
+
+The key is already listed in `private_dot_ssh/private_authorized_keys`, so a
+new client needs only its own copy of the private half. Nothing changes on
+rama.
+
+On the client, save the private key from the `id_ed25519_rama` item in
+1Password to `~/.ssh/id_ed25519_rama`. 1Password hands the key over without a
+passphrase, so give the copy one:
+
+```bash
+chmod 600 ~/.ssh/id_ed25519_rama
+ssh-keygen -p -f ~/.ssh/id_ed25519_rama
+```
+
+Add an entry to the client's `~/.ssh/config`. `UseKeychain` is for a Mac, and
+stores the passphrase in the Keychain so commands run without a prompt; leave
+it out elsewhere.
+
+```
+Host rama
+  HostName rama.local
+  User james
+  IdentityFile ~/.ssh/id_ed25519_rama
+  IdentitiesOnly yes
+  ForwardAgent no
+  AddKeysToAgent yes
+  UseKeychain yes
+```
+
+Check from the client: `ssh rama 'ruby -v'` prints mise's Ruby.
+
+### Replace the key
+
+Every client shares the one key, so replacing it locks all of them out until
+each has the new private half.
+
+Make the new key on any machine. `ssh-keygen` asks for a passphrase; give it
+one.
+
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_rama -C id_ed25519_rama
+```
+
+Replace the private key in the `id_ed25519_rama` item in 1Password. In a
+checkout of this repo, delete the old key line from
+`private_dot_ssh/private_authorized_keys`, then add the new one and push:
+
+```bash
+printf 'restrict,pty %s\n' "$(cat ~/.ssh/id_ed25519_rama.pub)" \
+  >> private_dot_ssh/private_authorized_keys
+git commit private_dot_ssh/private_authorized_keys -m "Replace rama's SSH key"
+git push
+```
+
+On rama, run `chezmoi update`, at the machine or over a session that is
+already open, because the old key stops working once its line is gone. Then
+repeat [Set up a client](#set-up-a-client) on each client.
+
+### Revoke the key
+
+Delete its line from `private_dot_ssh/private_authorized_keys` and run
+`chezmoi apply`. sshd reads the file on every login, so the key stops working
+at once, on every client. A session the key already opened stays open:
+`loginctl list-sessions` lists them and `sudo loginctl terminate-session ID`
+ends one.
+
+### Open a port
+
+Add a line to `ufw-rules.txt`, then `chezmoi apply`. A line is the arguments to
+`ufw`:
+
+```
+allow from 192.168.0.0/16 to any port 3000 proto tcp
+```
+
+`sudo ufw status` shows the rules in force. For a port needed once, run `sudo
+ufw allow ...` by hand and delete the rule afterwards.
+
+### Close a port
+
+Delete the line from `ufw-rules.txt`, then remove the rule by hand: `sudo ufw
+status numbered` lists the rules, and `sudo ufw delete N` removes one. Script
+10 adds rules and never removes them.
+
+### Change sshd's settings
+
+Edit `sshd-rama.conf`, then `chezmoi apply`. Script 09 installs the file,
+checks it with `sshd -t`, and checks with `sshd -T` that passwords are still
+off. If either check fails it puts the previous file back and fails the apply.
+An edit made directly in `/etc/ssh/sshd_config.d/00-rama.conf` lasts until the
+next apply that runs the script.
+
 ## Scripts
 
 chezmoi runs these in order during `chezmoi apply`. Each is `run_onchange_`: it
@@ -192,9 +322,12 @@ runs again only when its rendered content changes.
 | `after_06_snap_install` | Installs the missing snaps from `snap-packages.txt`; skips itself where snapd is not running | `snap-packages.txt` changes |
 | `after_07_terminal_font` | Rebuilds the font cache and sets the Ptyxis font to MesloLGS NF; fails outside a desktop session, so a later apply retries | the script changes |
 | `after_08_hide_zfs_member` | Installs a udev rule that makes udisks ignore ZFS pool members, so the dock and Files stop listing the root pool as an unmountable `rpool` volume | the script changes |
+| `after_09_sshd_lockdown` | Installs `sshd-rama.conf` as an sshd drop-in, checks it with `sshd -t` and `sshd -T`, rolls it back if either fails, and reloads sshd; fails on a key line without `restrict` | `sshd-rama.conf` or the key file changes |
+| `after_10_firewall` | Blocks inbound connections with ufw, adds the rules in `ufw-rules.txt`, and enables the firewall; skips itself where ufw cannot run | `ufw-rules.txt` changes |
 
 `before_` scripts run before chezmoi writes any file; `after_` scripts run
-after, because script 04 reads `~/.config/mise/config.toml`.
+after, because script 04 reads `~/.config/mise/config.toml` and script 09
+needs `~/.ssh/authorized_keys` in place before it turns passwords off.
 
 ## Playbooks
 

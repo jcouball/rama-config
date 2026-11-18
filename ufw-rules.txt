@@ -1,0 +1,19 @@
+# Inbound firewall rules, one per line. Each line is the arguments to `ufw`,
+# and must start with `allow` or `limit`.
+#
+# Script 10 turns the firewall on with everything inbound blocked, then adds
+# these. It embeds this file, so editing it re-runs the script on the next
+# `chezmoi apply`. Removing a line does not remove the rule: see "Close a port"
+# in the README.
+#
+# Outbound connections, replies, and connections from rama to itself need no
+# rule. A port Docker publishes is reachable whatever is listed here: see
+# "Remote access over SSH" in the README.
+#
+# No quoting: a line is split on spaces, so `comment '...'` does not work.
+
+# SSH, from the LAN only. 192.168.0.0/16 is the home network. fe80::/10 is
+# IPv6 link-local, which never crosses a router, for a client that reaches
+# rama.local over IPv6.
+allow from 192.168.0.0/16 to any port 22 proto tcp
+allow from fe80::/10 to any port 22 proto tcp

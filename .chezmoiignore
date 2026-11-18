@@ -8,6 +8,8 @@
 apt-packages.txt
 certification
 snap-packages.txt
+sshd-rama.conf
+ufw-rules.txt
 vscode-extensions.txt
 CLAUDE.md
 LICENSE.txt
