@@ -1,0 +1,27 @@
+[core]
+	pager = less -FRSX
+	editor = code -r -w
+	autocrlf = input
+	; ~/ rather than /Users/james: git expands it, and the absolute form silently
+	; disabled global excludes for any account that is not "james" -- including
+	; the certification VM's user.
+	excludesfile = ~/.gitignore_global
+
+[user]
+	email = jcouball@yahoo.com
+	name = James Couball
+
+[init]
+	defaultBranch = main
+
+[diff]
+	tool = vscode
+
+[difftool "vscode"]
+	cmd = code --wait --diff $LOCAL $REMOTE
+
+[difftool]
+	prompt = false
+[alias]
+	lg = log -n 10 --oneline --graph --decorate
+	nuke = !git reset --hard && git clean -fdx

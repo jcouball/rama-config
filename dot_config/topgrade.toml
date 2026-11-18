@@ -1,0 +1,19 @@
+# I use Topgrade to manage overall system and core tools, not the dependencies for
+# individual software projects. This prevents a global update from accidentally
+# breaking a project that depends on specific package versions.
+
+[misc]
+# Remove what an upgrade leaves behind. For apt this runs `apt autoremove`,
+# which removes packages that were installed only as dependencies and that
+# nothing needs any more.
+cleanup = true
+
+# A list of steps to exclusively run. All other steps will be skipped
+only = [
+    "system", # apt: Ubuntu's archive and the vendor repositories
+    "mise", # tools set to "latest" in ~/.config/mise/config.toml
+    "shell",
+    "vscode",
+    "chezmoi",
+    "github_cli_extensions",
+]

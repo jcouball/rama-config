@@ -1,0 +1,56 @@
+#!/bin/bash
+#
+# Install the system packages listed in apt-packages.txt.
+#
+# The list is embedded below, so editing apt-packages.txt changes this script
+# and run_onchange_ re-runs it.
+#
+# before_ because everything later depends on it: zsh must exist before the
+# login shell changes, and the compiler and headers must exist before asdf
+# builds Ruby and Python.
+
+set -euo pipefail
+
+if [ "$(id -u)" -eq 0 ]; then
+  echo "❌ Do not run 'sudo chezmoi apply'." >&2
+  echo "   Instead:  sudo -v && chezmoi apply" >&2
+  exit 1
+fi
+
+packages=()
+while IFS= read -r line; do
+  case "$line" in
+    ''|\#*) continue ;;
+  esac
+  packages+=("$line")
+done <<'EOF'
+{{ include "apt-packages.txt" -}}
+EOF
+
+if ! sudo -n true 2>/dev/null && [ ! -t 0 ]; then
+  echo "❌ Installing apt packages needs sudo, and there is no terminal to prompt on." >&2
+  echo "   Run 'sudo -v' first, then 'chezmoi apply' -- NOT 'sudo chezmoi apply'." >&2
+  exit 1
+fi
+
+echo ">> Checking ${#packages[@]} apt packages and installing any that are missing..."
+sudo apt-get update
+
+# --no-upgrade: install what is missing and leave installed packages at their
+# current version. Without it, adding one package to the list would upgrade
+# every listed package that has an update waiting. Upgrades are topgrade's job.
+sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-upgrade "${packages[@]}"
+
+# This machine is driven over ssh, so a rebuild that leaves sshd off is not
+# finished. The package normally enables it; this covers the case where it did
+# not. Skipped where systemd is not running, such as a container.
+if [ -d /run/systemd/system ]; then
+  if systemctl is-active --quiet ssh.socket || systemctl is-active --quiet ssh.service; then
+    echo ">> sshd is running."
+  else
+    echo ">> Enabling sshd..."
+    sudo systemctl enable --now ssh
+  fi
+fi
+
+echo ">> apt packages installed."

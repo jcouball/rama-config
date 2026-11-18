@@ -1,0 +1,64 @@
+#!/bin/bash
+#
+# Set the machine's host name to the answer given at `chezmoi init`.
+#
+# run_onchange_: the name is rendered into this script, so changing it (by
+# re-running `chezmoi init`) re-runs the script.
+
+set -euo pipefail
+
+# Never run under `sudo chezmoi apply`: Homebrew refuses to run as root, and
+# chezmoi may write root-owned files into the home directory. The scripts that
+# need root call sudo themselves.
+if [ "$(id -u)" -eq 0 ]; then
+  echo "❌ Do not run 'sudo chezmoi apply'." >&2
+  echo "   Instead:  sudo -v && chezmoi apply" >&2
+  exit 1
+fi
+
+WANT={{ if hasKey . "hostName" }}{{ .hostName | quote }}{{ else }}""{{ end }}
+
+[ -n "$WANT" ] || {
+  echo ">> No host name configured; skipping."
+  echo ">> To set one on an existing machine: chezmoi init"
+  exit 0
+}
+
+# A host name is letters, digits, and hyphens. Checking it here also keeps it
+# safe to place in the sed expression below.
+case "$WANT" in
+  *[!a-z0-9-]*|-*|*-)
+    echo "❌ '$WANT' is not a valid host name (lowercase letters, digits, hyphens)." >&2
+    exit 1
+    ;;
+esac
+
+if [ "$(hostname)" = "$WANT" ]; then
+  echo ">> Host name already set to '$WANT'."
+  exit 0
+fi
+
+# A container has no systemd and gets its host name from the runtime.
+if [ ! -d /run/systemd/system ]; then
+  echo ">> systemd is not running; leaving the host name as '$(hostname)'."
+  exit 0
+fi
+
+if ! sudo -n true 2>/dev/null && [ ! -t 0 ]; then
+  echo "❌ Setting the host name needs sudo, and there is no terminal to prompt on." >&2
+  echo "   Run 'sudo -v' first, then 'chezmoi apply' -- NOT 'sudo chezmoi apply'." >&2
+  exit 1
+fi
+
+echo ">> Setting host name to '$WANT'..."
+sudo hostnamectl set-hostname "$WANT"
+
+# Ubuntu maps the host name to 127.0.1.1 in /etc/hosts. Left on the old name,
+# every sudo call prints "unable to resolve host".
+if grep -q '^127\.0\.1\.1[[:space:]]' /etc/hosts; then
+  sudo sed -i "s/^127\.0\.1\.1[[:space:]].*/127.0.1.1 $WANT/" /etc/hosts
+else
+  echo "127.0.1.1 $WANT" | sudo tee -a /etc/hosts >/dev/null
+fi
+
+echo ">> Host name is now '$(hostname)'."

@@ -1,0 +1,9 @@
+# Outbound connections from rama. Inbound access is ~/.ssh/authorized_keys,
+# which this repo does not manage.
+
+Host *
+  ForwardAgent yes
+  ServerAliveInterval 60
+  StrictHostKeyChecking no
+  CASignatureAlgorithms +ssh-rsa
+  AddKeysToAgent yes

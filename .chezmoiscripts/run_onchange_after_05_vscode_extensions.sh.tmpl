@@ -1,0 +1,45 @@
+#!/bin/bash
+#
+# Install the VS Code extensions listed in vscode-extensions.txt.
+#
+# The list is embedded below, so editing vscode-extensions.txt changes this
+# script and run_onchange_ re-runs it. Extensions already installed are left
+# alone; topgrade's `vscode` step upgrades them.
+
+set -euo pipefail
+
+command -v code >/dev/null 2>&1 || {
+  echo "❌ 'code' is not installed. Script 03 installs it from Microsoft's apt repository." >&2
+  exit 1
+}
+
+wanted=()
+while IFS= read -r line; do
+  case "$line" in
+    ''|\#*) continue ;;
+  esac
+  wanted+=("$line")
+done <<'EOF'
+{{ include "vscode-extensions.txt" -}}
+EOF
+
+# VS Code reports extension ids in lower case.
+installed="$(code --list-extensions 2>/dev/null | tr '[:upper:]' '[:lower:]')"
+
+failed=()
+for extension in "${wanted[@]}"; do
+  id="$(printf '%s' "$extension" | tr '[:upper:]' '[:lower:]')"
+  if printf '%s\n' "$installed" | grep -qxF "$id"; then
+    continue
+  fi
+  echo ">> Installing VS Code extension: $extension"
+  code --install-extension "$extension" >/dev/null || failed+=("$extension")
+done
+
+if [ "${#failed[@]}" -gt 0 ]; then
+  echo "❌ These VS Code extensions did not install:" >&2
+  printf '     %s\n' "${failed[@]}" >&2
+  exit 1
+fi
+
+echo ">> All ${#wanted[@]} VS Code extensions installed."

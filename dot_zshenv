@@ -1,0 +1,22 @@
+# PATH is set here, not in .zprofile, because this machine is driven over ssh.
+# `ssh rama 'ruby -v'` starts a shell that is neither a login shell nor
+# interactive, and such a shell reads only this file.
+
+# mise's shims put the pinned Ruby, Node, Python, Go, and Rust, and the tools
+# mise installs, ahead of the system PATH. Interactive shells replace the shims
+# with `mise activate` in .zshrc.
+typeset -U path PATH
+path=(
+  "$HOME/bin"
+  "$HOME/.local/bin"
+  "$HOME/.local/share/mise/shims"
+  "$HOME/.local/share/jcouball-scripts/bin"
+  $path
+)
+export PATH
+
+# Java, from apt's default-jdk. Guarded so a shell started before the package
+# is installed does not export a JAVA_HOME that does not exist.
+if [[ -d /usr/lib/jvm/default-java ]]; then
+  export JAVA_HOME=/usr/lib/jvm/default-java
+fi

@@ -1,0 +1,5 @@
+# Login shells only. PATH is set in .zshenv, which every zsh reads.
+#
+# A login shell reads /etc/zsh/zprofile after .zshenv, and system files may
+# change PATH there. Re-apply .zshenv so the order it sets holds either way.
+source "$HOME/.zshenv"

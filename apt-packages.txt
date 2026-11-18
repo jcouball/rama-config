@@ -1,0 +1,81 @@
+# System packages installed with apt, one per line.
+#
+# apt is the first choice for everything: if the Ubuntu archive carries a
+# package, it is installed from here. That includes compilers, libraries, and
+# services, so Ruby, Python, and gem native extensions build against the same
+# packages a GitHub Actions Ubuntu runner has.
+#
+# Script 01 embeds this file, so editing it re-runs the install on the next
+# `chezmoi apply`. Removing a line does not uninstall the package.
+
+# The bootstrap installs curl and git by hand before chezmoi exists; they are
+# listed again so this file is the whole list.
+build-essential
+curl
+git
+
+# Shell and remote access
+zsh
+openssh-server
+
+# General
+ca-certificates
+gnupg
+unzip
+zip
+xz-utils
+pkg-config
+cmake
+sqlite3
+
+# Headers and tools for compiling Ruby. mise installs a precompiled Ruby when
+# one exists, so these matter for a version it has to build from source, and
+# for gems with native extensions (psych, openssl, ffi).
+autoconf
+bison
+patch
+libssl-dev
+libyaml-dev
+libreadline-dev
+zlib1g-dev
+libgmp-dev
+libncurses-dev
+libffi-dev
+libgdbm-dev
+libdb-dev
+uuid-dev
+
+# Headers for gems with native extensions
+libpq-dev
+libsqlite3-dev
+
+# Java
+default-jdk
+
+# Services
+postgresql
+redis-server
+
+# Command-line tools
+btop
+cloc
+fastfetch
+git-extras
+graphviz
+htop
+imagemagick
+jq
+jqp
+libvips-tools
+ocrmypdf
+pandoc
+poppler-utils
+qpdf
+ripgrep
+shellcheck
+skopeo
+stress
+tesseract-ocr
+tree
+wget
+yamllint

@@ -1,0 +1,107 @@
+#!/bin/bash
+#
+# Register vendor apt repositories and install their packages.
+#
+# These are the packages the Ubuntu archive does not carry, or carries in a
+# version too old to use, and whose vendor publishes an apt repository. Once a
+# repository is registered, `apt upgrade` (and so topgrade) keeps its package
+# current along with everything else.
+#
+# To add one: add an add_repository line and the package name below.
+#
+# before_ because script 04 needs mise and script 05 needs `code`.
+
+set -euo pipefail
+
+if [ "$(id -u)" -eq 0 ]; then
+  echo "❌ Do not run 'sudo chezmoi apply'." >&2
+  echo "   Instead:  sudo -v && chezmoi apply" >&2
+  exit 1
+fi
+
+if ! sudo -n true 2>/dev/null && [ ! -t 0 ]; then
+  echo "❌ Registering apt repositories needs sudo, and there is no terminal to prompt on." >&2
+  echo "   Run 'sudo -v' first, then 'chezmoi apply' -- NOT 'sudo chezmoi apply'." >&2
+  exit 1
+fi
+
+ARCH="$(dpkg --print-architecture)"
+KEYRINGS=/etc/apt/keyrings
+WORK_DIR="$(mktemp -d)"
+trap 'rm -rf "$WORK_DIR"' EXIT
+
+sudo install -d -m 0755 "$KEYRINGS"
+
+# add_repository NAME KEY_URL KEY_FILE URI SUITE [FINGERPRINT]
+#
+# Downloads the signing key to $KEYRINGS/KEY_FILE and writes
+# /etc/apt/sources.list.d/NAME.sources. KEY_FILE keeps the extension the vendor
+# publishes: apt reads `.asc` as ASCII-armored and `.gpg` as binary. With a
+# FINGERPRINT, the key is rejected unless its primary fingerprint matches.
+add_repository() {
+  local name="$1" key_url="$2" key_file="$KEYRINGS/$3" uri="$4" suite="$5" fingerprint="${6:-}"
+  local downloaded="$WORK_DIR/$3" actual
+
+  echo ">> Registering apt repository: $name"
+  curl -fsSL -o "$downloaded" "$key_url"
+
+  if [ -n "$fingerprint" ]; then
+    actual="$(gpg --show-keys --with-colons "$downloaded" | awk -F: '$1 == "fpr" { print $10; exit }')"
+    if [ "$actual" != "$fingerprint" ]; then
+      echo "❌ The signing key for $name has fingerprint '$actual', expected '$fingerprint'." >&2
+      echo "   Not registering the repository." >&2
+      exit 1
+    fi
+  fi
+
+  sudo install -m 0644 "$downloaded" "$key_file"
+  sudo tee "/etc/apt/sources.list.d/$name.sources" >/dev/null <<EOF
+Types: deb
+URIs: $uri
+Suites: $suite
+Components: main
+Architectures: $ARCH
+Signed-By: $key_file
+EOF
+}
+
+add_repository vscode \
+  https://packages.microsoft.com/keys/microsoft.asc microsoft.asc \
+  https://packages.microsoft.com/repos/code stable
+
+add_repository github-cli \
+  https://cli.github.com/packages/githubcli-archive-keyring.gpg githubcli-archive-keyring.gpg \
+  https://cli.github.com/packages stable
+
+add_repository 1password \
+  https://downloads.1password.com/linux/keys/1password.asc 1password.asc \
+  "https://downloads.1password.com/linux/debian/$ARCH" stable
+
+# The `stable` channel runs about a week behind `latest` and skips releases
+# with major regressions. Anthropic documents this key's fingerprint, so it is
+# checked. To follow `latest`, change both the URI's last segment and the suite.
+add_repository claude-code \
+  https://downloads.claude.ai/keys/claude-code.asc claude-code.asc \
+  https://downloads.claude.ai/claude-code/apt/stable stable \
+  31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE
+
+add_repository mise \
+  https://mise.jdx.dev/gpg-key.pub mise-archive-keyring.asc \
+  https://mise.jdx.dev/deb stable
+
+# The VS Code package asks whether to register Microsoft's repository itself.
+# It is registered above, so answer no and keep one definition of it.
+echo "code code/add-microsoft-repo boolean false" | sudo debconf-set-selections
+
+echo ">> Installing packages from vendor repositories..."
+sudo apt-get update
+
+# --no-upgrade for the same reason as script 01: upgrades are topgrade's job.
+sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-upgrade \
+  code \
+  gh \
+  1password-cli \
+  claude-code \
+  mise
+
+echo ">> Vendor packages installed."

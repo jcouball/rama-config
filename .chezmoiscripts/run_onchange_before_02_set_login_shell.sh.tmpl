@@ -1,0 +1,35 @@
+#!/bin/bash
+#
+# Make zsh the login shell. Ubuntu's default is bash, and the shell
+# configuration in this repo is written for zsh.
+#
+# Runs after script 01, which installs zsh.
+
+set -euo pipefail
+
+if [ "$(id -u)" -eq 0 ]; then
+  echo "❌ Do not run 'sudo chezmoi apply'." >&2
+  echo "   Instead:  sudo -v && chezmoi apply" >&2
+  exit 1
+fi
+
+ZSH_PATH=/usr/bin/zsh
+USER_NAME="$(id -un)"
+
+[ -x "$ZSH_PATH" ] || { echo "❌ $ZSH_PATH not found." >&2; exit 1; }
+
+current="$(getent passwd "$USER_NAME" | cut -d: -f7)"
+if [ "$current" = "$ZSH_PATH" ]; then
+  echo ">> Login shell is already zsh."
+  exit 0
+fi
+
+if ! sudo -n true 2>/dev/null && [ ! -t 0 ]; then
+  echo "❌ Changing the login shell needs sudo, and there is no terminal to prompt on." >&2
+  echo "   Run 'sudo -v' first, then 'chezmoi apply' -- NOT 'sudo chezmoi apply'." >&2
+  exit 1
+fi
+
+echo ">> Changing login shell from $current to $ZSH_PATH..."
+sudo chsh -s "$ZSH_PATH" "$USER_NAME"
+echo ">> Done. It takes effect at the next login."

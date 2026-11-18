@@ -1,0 +1,25 @@
+{{/*
+  Config template. chezmoi renders this once, at `chezmoi init`, and writes the
+  result to ~/.config/chezmoi/chezmoi.toml.
+
+  A rebuild asks one question: what this machine is called. promptStringOnce
+  only asks if the answer is not already recorded, so re-running `chezmoi init`
+  on a configured machine is silent.
+
+  To answer it without a terminal, pass:
+
+      chezmoi init --apply --promptString "Host name=some-name"
+
+  The key is the PROMPT TEXT, not the variable name. `--promptString
+  hostName=...` is accepted without complaint and then prompts anyway, failing
+  with "could not open a new TTY" where there is none.
+*/ -}}
+{{- $hostName := promptStringOnce . "hostName" "Host name" (output "hostname" | trim) -}}
+
+# Open files in VS Code, matching git's core.editor.
+[edit]
+    command = "code"
+    args = ["--wait"]
+
+[data]
+    hostName = {{ $hostName | quote }}

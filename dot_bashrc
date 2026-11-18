@@ -1,0 +1,25 @@
+# .bashrc
+#
+# zsh is the login shell on this machine; this keeps bash usable with the same
+# PATH as .zshenv.
+
+case ":$PATH:" in
+  *":$HOME/.local/share/mise/shims:"*) ;;
+  *) PATH="$HOME/bin:$HOME/.local/bin:$HOME/.local/share/mise/shims:$HOME/.local/share/jcouball-scripts/bin:$PATH" ;;
+esac
+export PATH
+
+if [[ -d /usr/lib/jvm/default-java ]]; then
+  export JAVA_HOME=/usr/lib/jvm/default-java
+fi
+
+# See .zshrc: interactive shells let mise manage PATH directly.
+if [[ $- == *i* ]] && command -v mise >/dev/null 2>&1; then
+  eval "$(mise activate bash)"
+fi
+
+# User specific aliases and functions
+
+alias ll="ls -al"
+
+export PS1="[\u] \W \$ "

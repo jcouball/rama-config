@@ -1,0 +1,44 @@
+#!/bin/bash
+#
+# Install the runtimes and tools declared in ~/.config/mise/config.toml.
+#
+# run_onchange_ keyed on the hash below, so editing the config re-runs this.
+#
+# after_ because it reads ~/.config/mise/config.toml, which chezmoi has to
+# write first. If it ran before, mise would find nothing to install and exit 0,
+# leaving the machine with no Ruby or Node after a run that looked clean. Hence
+# the check at the bottom: a zero exit code from mise proves nothing by itself.
+#
+# mise config hash: {{ include "dot_config/mise/config.toml" | sha256sum }}
+
+set -euo pipefail
+
+command -v mise >/dev/null 2>&1 || {
+  echo "❌ mise is not installed. Script 03 installs it from its apt repository." >&2
+  exit 1
+}
+
+CONFIG="$HOME/.config/mise/config.toml"
+[ -f "$CONFIG" ] || {
+  echo "❌ $CONFIG not found -- refusing to report success." >&2
+  exit 1
+}
+
+# The npm: tools need the Node that mise installs, found through its shims.
+export PATH="$HOME/.local/share/mise/shims:$PATH"
+
+cd "$HOME"
+
+echo ">> Installing runtimes and tools with mise..."
+mise install --yes
+
+echo ">> Verifying..."
+missing="$(mise ls --global --missing --no-header 2>/dev/null || true)"
+if [ -n "$missing" ]; then
+  echo "❌ These are declared but not installed:" >&2
+  printf '%s\n' "$missing" | sed 's/^/     /' >&2
+  exit 1
+fi
+
+mise reshim
+echo ">> All mise tools installed."

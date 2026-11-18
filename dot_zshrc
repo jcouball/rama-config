@@ -1,0 +1,48 @@
+# Enable Powerlevel10k instant prompt. Should stay close to the top of ~/.zshrc.
+# Initialization code that may require console input (password prompts, [y/n]
+# confirmations, etc.) must go above this block; everything else may go below.
+if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
+  source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
+fi
+
+# PATH is set up in .zshenv.
+
+# In an interactive shell, mise manages PATH directly instead of through its
+# shims, so a command a gem or npm package installs is found without a reshim,
+# and a project's own mise.toml or .tool-versions takes effect on `cd`.
+# Guarded: chezmoi writes this file before script 03 installs mise.
+(( $+commands[mise] )) && eval "$(mise activate zsh)"
+
+# Load Cargo (Rust) environment if installed
+[[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
+
+# Initialize completions
+autoload -Uz compinit
+compinit
+
+# Enable helpful Zsh options
+setopt autocd
+setopt correct
+setopt extended_glob
+setopt hist_ignore_dups
+setopt share_history
+
+# Powerlevel10k instant prompt config (optional, speeds up prompt)
+[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
+
+# The theme is a git checkout that chezmoi maintains: see .chezmoiexternal.toml.
+# Guarded so a shell opened before the first apply finishes does not error.
+P10K_THEME="$HOME/.local/share/powerlevel10k/powerlevel10k.zsh-theme"
+[[ -r "$P10K_THEME" ]] && source "$P10K_THEME"
+unset P10K_THEME
+
+# Git prompt using vcs_info
+autoload -Uz vcs_info
+precmd() { vcs_info; }
+zstyle ':vcs_info:git:*' formats ' (%b)'
+zstyle ':vcs_info:*' enable git
+
+# Aliases
+alias ll='ls -lh'
+alias gs='git status'
+alias zshrc='nano ~/.zshrc'
