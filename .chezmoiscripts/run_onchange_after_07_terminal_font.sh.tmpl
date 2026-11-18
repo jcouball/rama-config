@@ -1,0 +1,37 @@
+#!/bin/bash
+#
+# Make the MesloLGS NF font that .chezmoiexternal.toml downloads the Ptyxis
+# terminal font. The prompt theme draws its separators and icons from it;
+# without it they show as boxes.
+
+set -euo pipefail
+
+if [ "$(id -u)" -eq 0 ]; then
+  echo "❌ Do not run 'sudo chezmoi apply'." >&2
+  echo "   Instead:  sudo -v && chezmoi apply" >&2
+  exit 1
+fi
+
+font='MesloLGS NF 10'
+
+echo ">> Rebuilding the font cache..."
+fc-cache -f "$HOME/.local/share/fonts"
+
+# Ptyxis is Ubuntu's terminal. Skipped where it is not installed, such as a
+# server.
+if ! gsettings list-schemas 2>/dev/null | grep -qx org.gnome.Ptyxis; then
+  echo ">> Skipping the Ptyxis font: Ptyxis is not installed."
+  exit 0
+fi
+
+# gsettings needs the desktop session's bus. Failing instead of skipping keeps
+# run_onchange_ from recording the script as run, so the next apply retries.
+if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
+  echo "❌ Setting the Ptyxis font needs a desktop session, not SSH or a TTY." >&2
+  echo "   Run 'chezmoi apply' from a terminal on the desktop." >&2
+  exit 1
+fi
+
+echo ">> Setting the Ptyxis font to $font..."
+gsettings set org.gnome.Ptyxis use-system-font false
+gsettings set org.gnome.Ptyxis font-name "$font"

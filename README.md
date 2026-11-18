@@ -91,6 +91,7 @@ Afterwards, by hand:
 | VS Code extensions | `code --install-extension` | [vscode-extensions.txt](vscode-extensions.txt) |
 | GUI applications with no apt source | snap | [snap-packages.txt](snap-packages.txt), empty so far |
 | The powerlevel10k zsh theme, and the `jcouball/scripts` utilities | git checkouts kept by chezmoi | [.chezmoiexternal.toml](.chezmoiexternal.toml) |
+| The MesloLGS NF font the prompt needs | files downloaded once by chezmoi | [.chezmoiexternal.toml](.chezmoiexternal.toml) |
 | Config files | chezmoi | the `dot_*` files |
 
 ### Why each vendor repository is there
@@ -185,6 +186,7 @@ runs again only when its rendered content changes.
 | `after_04_mise_install` | `mise install`, then verifies nothing declared is missing | the mise config changes |
 | `after_05_vscode_extensions` | Installs the missing extensions from `vscode-extensions.txt` | `vscode-extensions.txt` changes |
 | `after_06_snap_install` | Installs the missing snaps from `snap-packages.txt`; skips itself where snapd is not running | `snap-packages.txt` changes |
+| `after_07_terminal_font` | Rebuilds the font cache and sets the Ptyxis font to MesloLGS NF; fails outside a desktop session, so a later apply retries | the script changes |
 
 `before_` scripts run before chezmoi writes any file; `after_` scripts run
 after, because script 04 reads `~/.config/mise/config.toml`.

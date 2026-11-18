@@ -15,3 +15,22 @@
     type = "git-repo"
     url = "https://github.com/jcouball/scripts.git"
     refreshPeriod = "168h"
+
+# The Nerd Font the prompt theme draws its separators and icons from. These
+# files never change upstream, so chezmoi downloads them once and does not
+# refresh them. Script 07 rebuilds the font cache and sets Ptyxis to use it.
+[".local/share/fonts/MesloLGS NF Regular.ttf"]
+    type = "file"
+    url = "https://github.com/romkatv/powerlevel10k-media/raw/master/MesloLGS%20NF%20Regular.ttf"
+
+[".local/share/fonts/MesloLGS NF Bold.ttf"]
+    type = "file"
+    url = "https://github.com/romkatv/powerlevel10k-media/raw/master/MesloLGS%20NF%20Bold.ttf"
+
+[".local/share/fonts/MesloLGS NF Italic.ttf"]
+    type = "file"
+    url = "https://github.com/romkatv/powerlevel10k-media/raw/master/MesloLGS%20NF%20Italic.ttf"
+
+[".local/share/fonts/MesloLGS NF Bold Italic.ttf"]
+    type = "file"
+    url = "https://github.com/romkatv/powerlevel10k-media/raw/master/MesloLGS%20NF%20Bold%20Italic.ttf"
