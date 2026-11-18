@@ -81,6 +81,7 @@ Afterwards, by hand:
 3. Log into 1Password.
 4. Run `claude` and `gh auth login` to sign in to each.
 5. Sign in to VS Code with GitHub and turn on Settings Sync.
+6. Sign in to mail in Thunderbird, and set View > Layout to Classic View.
 
 ## What installs what
 
@@ -91,7 +92,7 @@ Afterwards, by hand:
 | Ruby, Node, Python, Go, Rust | mise | [dot_config/mise/config.toml](dot_config/mise/config.toml) |
 | Command-line tools with no apt package, including chezmoi and topgrade | mise | the same file |
 | VS Code extensions | `code --install-extension` | [vscode-extensions.txt](vscode-extensions.txt) |
-| GUI applications with no apt source | snap | [snap-packages.txt](snap-packages.txt), empty so far |
+| GUI applications with no apt source | snap | [snap-packages.txt](snap-packages.txt) |
 | The powerlevel10k zsh theme, and the `jcouball/scripts` utilities | git checkouts kept by chezmoi | [.chezmoiexternal.toml](.chezmoiexternal.toml) |
 | The MesloLGS NF font the prompt needs | files downloaded once by chezmoi | [.chezmoiexternal.toml](.chezmoiexternal.toml) |
 | Config files | chezmoi | the `dot_*` files |
@@ -322,8 +323,8 @@ Different versions: apt provides PostgreSQL 18 and Redis 8.0, where the Mac has
   Slack cannot be installed in the arm64 container. Their repositories and
   signing keys were checked there, with the architecture forced to amd64, and
   nothing more. Script 03 as a whole was run with the installs simulated.
-- **A snap install.** `snap-packages.txt` is empty and the container has no
-  snapd, so script 06 has only run with a stand-in `snap` command.
+- **A snap install.** The container has no snapd, so script 06 has only run
+  there with a stand-in `snap` command.
 - **More GUI applications.** VS Code, 1Password, Chrome, Slack, Warp, and
   Typora are installed. Zoom, Discord, Synology Drive, and GitButler publish a
   deb with no apt repository; each needs a source chosen (snap, or a pinned

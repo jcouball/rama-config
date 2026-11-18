@@ -4,3 +4,7 @@
 # Snap is only for GUI applications that have no apt source: see "Principle:
 # conventional Ubuntu" in the README. Check who publishes a snap before adding
 # it (`snap info name`); many are not published by the software's vendor.
+
+# Mail. Published by Canonical, not Mozilla. The archive's thunderbird package
+# is a shim that installs this same snap.
+thunderbird
