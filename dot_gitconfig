@@ -25,3 +25,9 @@
 [alias]
 	lg = log -n 10 --oneline --graph --decorate
 	nuke = !git reset --hard && git clean -fdx
+[credential "https://github.com"]
+	helper = 
+	helper = !/usr/bin/gh auth git-credential
+[credential "https://gist.github.com"]
+	helper = 
+	helper = !/usr/bin/gh auth git-credential
