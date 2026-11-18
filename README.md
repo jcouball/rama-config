@@ -82,7 +82,7 @@ Afterwards, by hand:
 | What | Source | Declared in |
 | --- | --- | --- |
 | Compilers, libraries, services, zsh, sshd, and every tool Ubuntu carries | apt, Ubuntu archive | [apt-packages.txt](apt-packages.txt) |
-| VS Code, `gh`, the 1Password CLI, Claude Code, mise | apt, vendor repositories | script `before_03_vendor_apt_repositories` |
+| VS Code, `gh`, the 1Password app and CLI, Claude Code, mise | apt, vendor repositories | script `before_03_vendor_apt_repositories` |
 | Ruby, Node, Python, Go, Rust | mise | [dot_config/mise/config.toml](dot_config/mise/config.toml) |
 | Command-line tools with no apt package, including chezmoi and topgrade | mise | the same file |
 | VS Code extensions | `code --install-extension` | [vscode-extensions.txt](vscode-extensions.txt) |
@@ -95,6 +95,7 @@ Afterwards, by hand:
 | --- | --- |
 | `code` | Not in the archive |
 | `gh` | The archive has 2.46.0, more than two years old |
+| `1password` | Not in the archive |
 | `1password-cli` | Not in the archive |
 | `claude-code` | Not in the archive |
 | `mise` | Not in the archive |
@@ -206,10 +207,10 @@ limits it to these steps:
 
 - `system`: `apt update`, `apt dist-upgrade`, `apt clean`, and `apt
   autoremove`. This covers Ubuntu's archive and every vendor repository, so VS
-  Code, `gh`, the 1Password CLI, Claude Code, and mise itself upgrade here. It
-  asks for the sudo password. The `autoremove` comes from `cleanup = true` and
-  removes packages that were installed only as dependencies and are no longer
-  needed.
+  Code, `gh`, the 1Password app and CLI, Claude Code, and mise itself upgrade
+  here. It asks for the sudo password. The `autoremove` comes from `cleanup =
+  true` and removes packages that were installed only as dependencies and are
+  no longer needed.
 - `mise`: `mise upgrade` and `mise prune`. The upgrade moves tools set to
   `latest` forward. Runtimes pinned to an exact version do not move.
 - `vscode`: updates the extensions.
@@ -270,6 +271,6 @@ Different versions: apt provides PostgreSQL 18 and Redis 8.0, where the Mac has
 - **GitHub rate limits.** mise asks the GitHub API for release information.
   The container run did not hit the unauthenticated limit. If a rebuild does,
   set `GITHUB_TOKEN` and run `chezmoi apply` again.
-- **GUI applications.** Only VS Code is installed. Each other application
-  needs a source chosen (apt, a vendor repository, snap, or Flatpak) and
-  recorded here.
+- **GUI applications.** Only VS Code and 1Password are installed. Each other
+  application needs a source chosen (apt, a vendor repository, snap, or
+  Flatpak) and recorded here.

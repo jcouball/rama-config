@@ -73,6 +73,9 @@ add_repository github-cli \
   https://cli.github.com/packages/githubcli-archive-keyring.gpg githubcli-archive-keyring.gpg \
   https://cli.github.com/packages stable
 
+# The 1password package's postinst rewrites 1password.sources to use its own
+# copy of the key in /usr/share/keyrings. Either version of the file works, so
+# it does not matter which one wrote it last.
 add_repository 1password \
   https://downloads.1password.com/linux/keys/1password.asc 1password.asc \
   "https://downloads.1password.com/linux/debian/$ARCH" stable
@@ -100,6 +103,7 @@ sudo apt-get update
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-upgrade \
   code \
   gh \
+  1password \
   1password-cli \
   claude-code \
   mise
