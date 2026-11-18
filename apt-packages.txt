@@ -81,4 +81,5 @@ stress
 tesseract-ocr
 tree
 wget
+wl-clipboard
 yamllint
