@@ -90,12 +90,14 @@ add_repository 1password \
   https://downloads.1password.com/linux/keys/1password.asc 1password.asc \
   "https://downloads.1password.com/linux/debian/$ARCH" stable
 
-# The `stable` channel runs about a week behind `latest` and skips releases
-# with major regressions. Anthropic documents this key's fingerprint, so it is
-# checked. To follow `latest`, change both the URI's last segment and the suite.
+# The `latest` channel matches Claude Code's default update channel, so its
+# "Update available" notice means an upgrade is ready. `stable` runs about a
+# week behind and skips releases with major regressions. Anthropic documents
+# this key's fingerprint, so it is checked. To follow `stable`, change both the
+# URI's last segment and the suite.
 add_repository claude-code \
   https://downloads.claude.ai/keys/claude-code.asc claude-code.asc \
-  https://downloads.claude.ai/claude-code/apt/stable stable \
+  https://downloads.claude.ai/claude-code/apt/latest latest \
   31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE
 
 add_repository mise \

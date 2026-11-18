@@ -110,10 +110,11 @@ Afterwards, by hand:
 | `google-chrome-stable` | Not in the archive |
 | `slack-desktop` | Not in the archive |
 
-Claude Code follows the repository's `stable` channel, which runs about a week
-behind `latest` and skips releases with major regressions. A newly released
-model can need a newer version than `stable` serves. To switch, change the URI
-and suite in script 03 from `stable` to `latest`.
+Claude Code follows the repository's `latest` channel, the same channel Claude
+Code checks for updates, so its "Update available" notice means `topgrade` has
+an upgrade to install. The `stable` channel runs about a week behind and skips
+releases with major regressions. To switch, change the URI and suite in script
+03 from `latest` to `stable`.
 
 The script checks the Claude Code and Docker signing keys against the
 fingerprints Anthropic and Docker document. The other eight keys are fetched
