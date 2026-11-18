@@ -1,0 +1,57 @@
+#!/bin/bash
+#
+# Install the snaps listed in snap-packages.txt.
+#
+# The list is embedded below, so editing snap-packages.txt changes this script
+# and run_onchange_ re-runs it.
+#
+# Installed snaps are skipped, not refreshed: snapd refreshes them itself,
+# several times a day.
+
+set -euo pipefail
+
+if [ "$(id -u)" -eq 0 ]; then
+  echo "❌ Do not run 'sudo chezmoi apply'." >&2
+  echo "   Instead:  sudo -v && chezmoi apply" >&2
+  exit 1
+fi
+
+snaps=()
+while IFS= read -r line; do
+  case "$line" in
+    ''|\#*) continue ;;
+  esac
+  snaps+=("$line")
+done <<'EOF_SNAPS'
+{{ include "snap-packages.txt" -}}
+EOF_SNAPS
+
+if [ "${#snaps[@]}" -eq 0 ]; then
+  echo ">> No snaps listed."
+  exit 0
+fi
+
+# snapd needs systemd. Skipped where it is not running, such as a container.
+if ! command -v snap >/dev/null || [ ! -d /run/systemd/system ]; then
+  echo ">> Skipping ${#snaps[@]} snaps: snapd is not running here."
+  exit 0
+fi
+
+if ! sudo -n true 2>/dev/null && [ ! -t 0 ]; then
+  echo "❌ Installing snaps needs sudo, and there is no terminal to prompt on." >&2
+  echo "   Run 'sudo -v' first, then 'chezmoi apply' -- NOT 'sudo chezmoi apply'." >&2
+  exit 1
+fi
+
+echo ">> Checking ${#snaps[@]} snaps and installing any that are missing..."
+for entry in "${snaps[@]}"; do
+  # Split the line into the name and its options.
+  read -r -a args <<<"$entry"
+  if snap list "${args[0]}" >/dev/null 2>&1; then
+    continue
+  fi
+  echo ">> Installing snap: ${args[0]}"
+  sudo snap install "${args[@]}"
+done
+
+echo ">> Snaps installed."

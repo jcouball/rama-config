@@ -1,0 +1,6 @@
+# Snaps to install, one per line. Each line is the arguments to `snap install`:
+# the snap's name, then any options it needs, such as `--classic`.
+#
+# Snap is only for GUI applications that have no apt source: see "Principle:
+# conventional Ubuntu" in the README. Check who publishes a snap before adding
+# it (`snap info name`); many are not published by the software's vendor.

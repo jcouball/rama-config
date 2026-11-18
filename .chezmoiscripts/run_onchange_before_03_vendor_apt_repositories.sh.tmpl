@@ -32,14 +32,17 @@ trap 'rm -rf "$WORK_DIR"' EXIT
 
 sudo install -d -m 0755 "$KEYRINGS"
 
-# add_repository NAME KEY_URL KEY_FILE URI SUITE [FINGERPRINT]
+# add_repository NAME KEY_URL KEY_FILE URI SUITE [FINGERPRINT] [COMPONENTS]
 #
 # Downloads the signing key to $KEYRINGS/KEY_FILE and writes
 # /etc/apt/sources.list.d/NAME.sources. KEY_FILE keeps the extension the vendor
 # publishes: apt reads `.asc` as ASCII-armored and `.gpg` as binary. With a
 # FINGERPRINT, the key is rejected unless its primary fingerprint matches.
+# COMPONENTS defaults to `main`. A SUITE ending in `/` is a flat repository,
+# which has no components.
 add_repository() {
   local name="$1" key_url="$2" key_file="$KEYRINGS/$3" uri="$4" suite="$5" fingerprint="${6:-}"
+  local components="${7:-main}"
   local downloaded="$WORK_DIR/$3" actual
 
   echo ">> Registering apt repository: $name"
@@ -55,15 +58,23 @@ add_repository() {
   fi
 
   sudo install -m 0644 "$downloaded" "$key_file"
-  sudo tee "/etc/apt/sources.list.d/$name.sources" >/dev/null <<EOF
-Types: deb
-URIs: $uri
-Suites: $suite
-Components: main
-Architectures: $ARCH
-Signed-By: $key_file
-EOF
+  {
+    echo "Types: deb"
+    echo "URIs: $uri"
+    echo "Suites: $suite"
+    case "$suite" in
+      */) ;;
+      *) echo "Components: $components" ;;
+    esac
+    echo "Architectures: $ARCH"
+    echo "Signed-By: $key_file"
+  } | sudo tee "/etc/apt/sources.list.d/$name.sources" >/dev/null
 }
+
+# Some packages register their vendor's repository themselves when they
+# install. apt refuses to update when two files define one repository with
+# different keys, so where a package does this, NAME below is the file name the
+# package uses. That leaves one definition, whichever side wrote it last.
 
 add_repository vscode \
   https://packages.microsoft.com/keys/microsoft.asc microsoft.asc \
@@ -73,9 +84,8 @@ add_repository github-cli \
   https://cli.github.com/packages/githubcli-archive-keyring.gpg githubcli-archive-keyring.gpg \
   https://cli.github.com/packages stable
 
-# The 1password package's postinst rewrites 1password.sources to use its own
-# copy of the key in /usr/share/keyrings. Either version of the file works, so
-# it does not matter which one wrote it last.
+# The 1password package rewrites 1password.sources on every install and
+# upgrade, pointing it at its own copy of the key in /usr/share/keyrings.
 add_repository 1password \
   https://downloads.1password.com/linux/keys/1password.asc 1password.asc \
   "https://downloads.1password.com/linux/debian/$ARCH" stable
@@ -92,6 +102,65 @@ add_repository mise \
   https://mise.jdx.dev/gpg-key.pub mise-archive-keyring.asc \
   https://mise.jdx.dev/deb stable
 
+# The warp-terminal package writes warpdotdev.sources only when the file is
+# missing, so this definition stays.
+add_repository warpdotdev \
+  https://releases.warp.dev/linux/keys/warp.asc warp.asc \
+  https://releases.warp.dev/linux/deb stable
+
+# A flat repository: the suite is a path and there are no components.
+add_repository typora \
+  https://downloads.typora.io/typora.gpg typora.gpg \
+  https://downloads.typora.io/linux ./
+
+# Docker Engine, not Docker Desktop: Desktop runs the engine inside a virtual
+# machine, which Linux does not need. Docker names its suites after the Ubuntu
+# release and documents this key's fingerprint, so it is checked.
+UBUNTU_RELEASE="$(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")"
+add_repository docker \
+  https://download.docker.com/linux/ubuntu/gpg docker.asc \
+  https://download.docker.com/linux/ubuntu "$UBUNTU_RELEASE" \
+  9DC858229FC7DD38854AE2D88D81803C0EBFCD88 stable
+
+packages=(
+  code
+  gh
+  1password-cli
+  claude-code
+  mise
+  warp-terminal
+  typora
+  docker-ce
+  docker-ce-cli
+  containerd.io
+  docker-buildx-plugin
+  docker-compose-plugin
+)
+
+# Chrome, Slack, and the 1Password desktop app are published for amd64 only.
+# rama is amd64; the check keeps this script usable in an arm64 container.
+if [ "$ARCH" = amd64 ]; then
+  # The google-chrome-stable package rewrites google-chrome.sources on every
+  # install and upgrade, pointing it at its own copy of the key.
+  add_repository google-chrome \
+    https://dl.google.com/linux/linux_signing_key.pub google-chrome.asc \
+    https://dl.google.com/linux/chrome/deb stable
+
+  # The slack-desktop package installs a daily cron job that writes a second
+  # definition of this repository, slack.list, and apt then warns about the
+  # duplicate on every update. /etc/default/slack is the switch the cron job
+  # reads; this turns it off.
+  add_repository slack \
+    https://packagecloud.io/slacktechnologies/slack/gpgkey slack.asc \
+    https://packagecloud.io/slacktechnologies/slack/debian jessie
+  printf 'repo_add_once="false"\nrepo_reenable_on_distupgrade="false"\n' \
+    | sudo tee /etc/default/slack >/dev/null
+
+  packages+=(1password google-chrome-stable slack-desktop)
+else
+  echo ">> Skipping 1Password, Chrome, and Slack: no $ARCH packages."
+fi
+
 # The VS Code package asks whether to register Microsoft's repository itself.
 # It is registered above, so answer no and keep one definition of it.
 echo "code code/add-microsoft-repo boolean false" | sudo debconf-set-selections
@@ -100,12 +169,14 @@ echo ">> Installing packages from vendor repositories..."
 sudo apt-get update
 
 # --no-upgrade for the same reason as script 01: upgrades are topgrade's job.
-sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-upgrade \
-  code \
-  gh \
-  1password \
-  1password-cli \
-  claude-code \
-  mise
+sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-upgrade "${packages[@]}"
+
+# The docker group lets its members run docker without sudo, which a test run
+# started over ssh needs. Membership is equivalent to root access. It takes
+# effect at the next login.
+if ! id -nG | tr ' ' '\n' | grep -qx docker; then
+  echo ">> Adding $(id -un) to the docker group..."
+  sudo usermod -aG docker "$(id -un)"
+fi
 
 echo ">> Vendor packages installed."
