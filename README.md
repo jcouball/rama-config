@@ -78,7 +78,9 @@ Afterwards, by hand:
    `~/.ssh/authorized_keys`.
 2. Log out and back in so the login shell change and the `docker` group
    membership take effect.
-3. Run `claude` and `gh auth login` to sign in to each.
+3. Log into 1Password.
+4. Run `claude` and `gh auth login` to sign in to each.
+5. Sign in to VS Code with GitHub and turn on Settings Sync.
 
 ## What installs what
 
