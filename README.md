@@ -121,9 +121,9 @@ Afterwards, by hand:
 2. Log out and back in so the login shell change and the `docker` group
    membership take effect.
 3. Log into 1Password.
-4. Run `claude` and `gh auth login` to sign in to each.
-5. Sign in to VS Code with GitHub and turn on Settings Sync.
-6. Sign in to mail in Thunderbird, and set View > Layout to Classic View.
+4. Sign in to mail in Thunderbird, and set View > Layout to Classic View.
+5. Run `claude` and `gh auth login` to sign in to each.
+6. Sign in to VS Code with GitHub and turn on Settings Sync.
 7. Sign in to Telegram: scan its QR code from the phone app.
 
 ## What installs what
