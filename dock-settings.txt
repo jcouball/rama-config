@@ -1,0 +1,7 @@
+# Ubuntu Dock settings that differ from the defaults, as key=value lines in
+# the form `dconf dump` prints. Script 11 sets each one and resets every other
+# dock setting to its default. `dock-capture` rewrites this file from the live
+# dock.
+dash-max-icon-size=30
+show-mounts=false
+show-trash=true

@@ -7,6 +7,8 @@
 
 apt-packages.txt
 certification
+dock-favorites.txt
+dock-settings.txt
 snap-packages.txt
 sshd-rama.conf
 ufw-rules.txt

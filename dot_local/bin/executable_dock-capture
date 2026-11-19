@@ -1,0 +1,61 @@
+#!/bin/bash
+#
+# Copy the live dock into the chezmoi repo.
+#
+# Rewrites dock-favorites.txt with the dock's pinned launchers and
+# dock-settings.txt with the Ubuntu Dock settings that differ from the
+# defaults. The comment lines at the top of each file are kept.
+#
+# Run it after changing the dock by hand, then review with
+# `chezmoi git diff` and commit. Without it, the next `chezmoi apply` that
+# runs the dock script puts the dock back the way the repo has it.
+
+set -euo pipefail
+
+dock_path=/org/gnome/shell/extensions/dash-to-dock/
+
+if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
+  echo "❌ Reading the dock needs a desktop session, not SSH or a TTY." >&2
+  exit 1
+fi
+
+for tool in chezmoi gsettings dconf; do
+  if ! command -v "$tool" >/dev/null; then
+    echo "❌ $tool is not installed." >&2
+    exit 1
+  fi
+done
+
+source_dir=$(chezmoi source-path)
+
+# Print the comment lines a list file starts with.
+header() {
+  while IFS= read -r line; do
+    case "$line" in
+      \#*) printf '%s\n' "$line" ;;
+      *) break ;;
+    esac
+  done < "$1"
+}
+
+# Replace a list file with its header followed by the lines on stdin.
+rewrite() {
+  local file="$source_dir/$1" tmp
+  tmp=$(mktemp "$file.XXXXXX")
+  { header "$file"; cat; } > "$tmp"
+  mv "$tmp" "$file"
+}
+
+# gsettings prints ['a.desktop', 'b.desktop']; put each name on its own line.
+gsettings get org.gnome.shell favorite-apps \
+  | { grep -o "'[^']*'" || true; } \
+  | tr -d "'" \
+  | rewrite dock-favorites.txt
+
+# dconf dump prints a [/] group line, then one key=value line per setting.
+dconf dump "$dock_path" \
+  | { grep -v -e '^\[' -e '^$' || true; } \
+  | rewrite dock-settings.txt
+
+echo ">> Wrote dock-favorites.txt and dock-settings.txt in $source_dir."
+git -C "$source_dir" status --short -- dock-favorites.txt dock-settings.txt

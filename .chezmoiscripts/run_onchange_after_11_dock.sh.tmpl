@@ -1,0 +1,120 @@
+#!/bin/bash
+#
+# Set the dock's pinned launchers and settings from dock-favorites.txt and
+# dock-settings.txt.
+#
+# Both lists are embedded below, so editing either changes this script and
+# run_onchange_ re-runs it.
+#
+# The repo owns the dock: the pinned launchers become exactly the list, and a
+# dock setting the list does not name goes back to its default. A change made
+# by hand in the dock or in Settings lasts until this script next runs. To keep
+# one, run `dock-capture`, which rewrites both lists from the live dock.
+#
+# The web page launchers in the list, such as glinet.desktop, are written by
+# chezmoi from dot_local/share/private_applications. The dock leaves out a
+# listed launcher whose application is not installed.
+
+set -euo pipefail
+
+if [ "$(id -u)" -eq 0 ]; then
+  echo "❌ Do not run 'sudo chezmoi apply'." >&2
+  echo "   Instead:  sudo -v && chezmoi apply" >&2
+  exit 1
+fi
+
+dock_schema=org.gnome.shell.extensions.dash-to-dock
+dock_path=/org/gnome/shell/extensions/dash-to-dock/
+
+favorites=()
+while IFS= read -r line; do
+  case "$line" in
+    ''|\#*) continue ;;
+  esac
+  favorites+=("$line")
+done <<'EOF_FAVORITES'
+{{ include "dock-favorites.txt" -}}
+EOF_FAVORITES
+
+declare -A settings=()
+while IFS= read -r line; do
+  case "$line" in
+    ''|\#*) continue ;;
+    *=*) settings["${line%%=*}"]="${line#*=}" ;;
+    *)
+      echo "❌ dock-settings.txt: not a key=value line: $line" >&2
+      exit 1
+      ;;
+  esac
+done <<'EOF_SETTINGS'
+{{ include "dock-settings.txt" -}}
+EOF_SETTINGS
+
+# Skipped where there is no GNOME Shell, such as a server.
+schemas=$(gsettings list-schemas 2>/dev/null || true)
+if ! grep -qx org.gnome.shell <<<"$schemas"; then
+  echo ">> Skipping the dock: GNOME Shell is not installed."
+  exit 0
+fi
+
+# gsettings needs the desktop session's bus. Failing instead of skipping keeps
+# run_onchange_ from recording the script as run, so the next apply retries.
+if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
+  echo "❌ Setting up the dock needs a desktop session, not SSH or a TTY." >&2
+  echo "   Run 'chezmoi apply' from a terminal on the desktop." >&2
+  exit 1
+fi
+
+# The shell reads launchers from this database; refresh it so a launcher
+# chezmoi has just written is found.
+if command -v update-desktop-database >/dev/null; then
+  update-desktop-database "$HOME/.local/share/applications"
+fi
+
+# The list in the form gsettings prints it: ['a.desktop', 'b.desktop'].
+wanted='['
+for favorite in "${favorites[@]}"; do
+  wanted+="'$favorite', "
+done
+wanted="${wanted%, }]"
+
+current=$(gsettings get org.gnome.shell favorite-apps)
+if [ "$current" = "$wanted" ]; then
+  echo ">> The dock's launchers already match dock-favorites.txt."
+else
+  echo ">> Setting the dock's launchers from dock-favorites.txt. They were:"
+  echo "   $current"
+  gsettings set org.gnome.shell favorite-apps "$wanted"
+fi
+
+if ! grep -qx "$dock_schema" <<<"$schemas"; then
+  echo ">> Skipping the dock settings: Ubuntu Dock is not installed."
+  exit 0
+fi
+
+# dconf dump lists the settings that differ from the defaults. Reset each one
+# the list does not name.
+if command -v dconf >/dev/null; then
+  while IFS= read -r line; do
+    case "$line" in
+      ''|\[*) continue ;;
+    esac
+    key="${line%%=*}"
+    if [ -z "${settings[$key]+set}" ]; then
+      echo ">> Resetting dock setting $key to its default. It was: ${line#*=}"
+      gsettings reset "$dock_schema" "$key"
+    fi
+  done < <(dconf dump "$dock_path")
+else
+  echo ">> dconf is not installed: dock settings missing from the list are left alone."
+fi
+
+for key in "${!settings[@]}"; do
+  value="${settings[$key]}"
+  current=$(gsettings get "$dock_schema" "$key")
+  if [ "$current" != "$value" ]; then
+    echo ">> Setting dock setting $key to $value. It was: $current"
+    gsettings set "$dock_schema" "$key" "$value"
+  fi
+done
+echo ">> The dock settings match dock-settings.txt."
