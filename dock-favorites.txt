@@ -1,0 +1,12 @@
+# The dock's pinned launchers, top to bottom. One .desktop file name per line.
+# Script 11 sets the dock to exactly this list. `dock-capture` rewrites this
+# file from the live dock.
+org.gnome.Nautilus.desktop
+google-chrome.desktop
+telegram-desktop_telegram-desktop.desktop
+thunderbird_thunderbird.desktop
+com.microsoft.VSCode.desktop
+org.gnome.Ptyxis.desktop
+glinet.desktop
+com.onepassword.OnePassword.desktop
+reddit.desktop

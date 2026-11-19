@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Reddit
+Exec=google-chrome --app=https://www.reddit.com/
+Icon=reddit
+Categories=Network;
+# Chrome gives an --app window this class, built from the URL's host and path
+# and the profile directory. It ties the window to this launcher, so the dock
+# does not show a second icon for it.
+StartupWMClass=chrome-www.reddit.com__-Default

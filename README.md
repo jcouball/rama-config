@@ -63,7 +63,8 @@ Step 2 downloads a temporary copy of chezmoi and runs it. It asks what the
 machine is called, then installs the apt packages, changes the login shell to
 zsh, registers the vendor apt repositories, writes the config files, installs
 the mise runtimes and tools, installs the VS Code extensions, installs any
-snaps listed, restricts sshd to key logins, and turns on the firewall.
+snaps listed, restricts sshd to key logins, turns on the firewall, and sets up
+the dock.
 
 The temporary chezmoi in `/tmp` is only for this first run. mise installs the
 permanent one.
@@ -96,6 +97,8 @@ Afterwards, by hand:
 | GUI applications with no apt source | snap | [snap-packages.txt](snap-packages.txt) |
 | The powerlevel10k zsh theme, and the `jcouball/scripts` utilities | git checkouts kept by chezmoi | [.chezmoiexternal.toml](.chezmoiexternal.toml) |
 | The MesloLGS NF font the prompt needs | files downloaded once by chezmoi | [.chezmoiexternal.toml](.chezmoiexternal.toml) |
+| Dock launchers for web pages, and their icons | chezmoi | [dot_local/share/private_applications](dot_local/share/private_applications), [dot_local/share/icons](dot_local/share/icons) |
+| The dock's pinned launchers and settings | gsettings | [dock-favorites.txt](dock-favorites.txt), [dock-settings.txt](dock-settings.txt) |
 | Config files | chezmoi | the `dot_*` files |
 
 ### Why each vendor repository is there
@@ -325,6 +328,7 @@ runs again only when its rendered content changes.
 | `after_08_hide_zfs_member` | Installs a udev rule that makes udisks ignore ZFS pool members, so the dock and Files stop listing the root pool as an unmountable `rpool` volume | the script changes |
 | `after_09_sshd_lockdown` | Installs `sshd-rama.conf` as an sshd drop-in, checks it with `sshd -t` and `sshd -T`, rolls it back if either fails, and reloads sshd; fails on a key line without `restrict` | `sshd-rama.conf` or the key file changes |
 | `after_10_firewall` | Blocks inbound connections with ufw, adds the rules in `ufw-rules.txt`, and enables the firewall; skips itself where ufw cannot run | `ufw-rules.txt` changes |
+| `after_11_dock` | Sets the dock's pinned launchers to `dock-favorites.txt` and its settings to `dock-settings.txt`, resetting every other dock setting to its default; fails outside a desktop session, so a later apply retries | either list changes |
 | `after_12_mouse_scroll` | Turns on natural scrolling for the mouse wheel; skips itself where GNOME is not installed, and fails outside a desktop session, so a later apply retries | the script changes |
 
 `before_` scripts run before chezmoi writes any file; `after_` scripts run
@@ -359,6 +363,20 @@ beside the others and changes no default. See the note on `mise prune` under
 
 Install a VS Code extension: add its id to `vscode-extensions.txt`, then
 `chezmoi apply`.
+
+Change the dock: pin, unpin, or reorder in the dock itself, and change its
+settings in Settings > Ubuntu Desktop > Dock. Then run `dock-capture`, which
+rewrites `dock-favorites.txt` and `dock-settings.txt` from the live dock, and
+commit. `chezmoi status` does not report a dock changed by hand, and the next
+apply that runs script 11 puts the dock back the way the lists have it.
+Editing the lists and running `chezmoi apply` works too.
+
+Add a dock icon for a web page: copy
+`dot_local/share/private_applications/glinet.desktop` under a new name and
+change `Name`, the URL in `Exec`, `Icon`, and `StartupWMClass`. Put a PNG icon
+named after the `Icon` value in `dot_local/share/icons/hicolor/SIZE/apps/`,
+where `SIZE` is the image's size, such as `256x256`. Add the launcher's file
+name to `dock-favorites.txt`, then `chezmoi apply`.
 
 Update everything: `topgrade`. See [Updates](#updates).
 
