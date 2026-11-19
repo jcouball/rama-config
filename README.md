@@ -125,6 +125,9 @@ Afterwards, by hand:
 5. Run `claude` and `gh auth login` to sign in to each.
 6. Sign in to VS Code with GitHub and turn on Settings Sync.
 7. Sign in to Telegram: scan its QR code from the phone app.
+8. In Warp, set Terminal font to `MesloLGS NF` under Settings > Appearance >
+   Text. Warp does not sync or restore the setting, and script
+   `after_07_terminal_font` sets the font only for Ptyxis.
 
 ## What installs what
 
