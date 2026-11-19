@@ -32,6 +32,11 @@ sqlite3
 # fc-cache, which script 07 runs after downloading the terminal font
 fontconfig
 
+# The editor font VS Code's settings name. Settings Sync carries the setting
+# from machine to machine but not the font, and without it the editor falls
+# back to the default monospace font and shows no ligatures.
+fonts-firacode
+
 # dconf, which script 11 and dock-capture use to list the dock settings that
 # differ from the defaults
 dconf-cli
