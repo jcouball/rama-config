@@ -6,8 +6,8 @@
 # and run_onchange_ re-runs it.
 #
 # before_ because everything later depends on it: zsh must exist before the
-# login shell changes, and the compiler and headers must exist before asdf
-# builds Ruby and Python.
+# login shell changes, and the compiler and headers must exist before mise
+# installs Ruby and Python and gems compile their native extensions.
 
 set -euo pipefail
 

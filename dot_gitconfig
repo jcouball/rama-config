@@ -2,9 +2,8 @@
 	pager = less -FRSX
 	editor = code -r -w
 	autocrlf = input
-	; ~/ rather than /Users/james: git expands it, and the absolute form silently
-	; disabled global excludes for any account that is not "james" -- including
-	; the certification VM's user.
+	; ~/ rather than an absolute path: git expands it, so global excludes work
+	; whatever the account is called.
 	excludesfile = ~/.gitignore_global
 
 [user]

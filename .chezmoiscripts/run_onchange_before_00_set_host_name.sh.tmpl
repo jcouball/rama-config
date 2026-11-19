@@ -7,9 +7,8 @@
 
 set -euo pipefail
 
-# Never run under `sudo chezmoi apply`: Homebrew refuses to run as root, and
-# chezmoi may write root-owned files into the home directory. The scripts that
-# need root call sudo themselves.
+# Never run under `sudo chezmoi apply`: chezmoi would write root-owned files
+# into the home directory. The scripts that need root call sudo themselves.
 if [ "$(id -u)" -eq 0 ]; then
   echo "❌ Do not run 'sudo chezmoi apply'." >&2
   echo "   Instead:  sudo -v && chezmoi apply" >&2

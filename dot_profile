@@ -1,5 +1,5 @@
 PATH="$HOME/bin:$PATH"
 
-# Guarded: Rust arrives via asdf during provisioning, so this file is written
-# before ~/.cargo/env exists.
+# Guarded: mise installs Rust in script 04, so on a rebuild this file is
+# written before ~/.cargo/env exists.
 [ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
