@@ -61,7 +61,6 @@ libsqlite3-dev
 default-jdk
 
 # Services
-postgresql
 redis-server
 
 # Command-line tools

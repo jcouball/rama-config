@@ -212,8 +212,8 @@ packet-filter rules, which run ahead of ufw's, so `docker run -p 8080:80` is
 reachable from the network whatever `ufw-rules.txt` says. To keep a container
 private, publish it on the loopback address: `-p 127.0.0.1:8080:80`.
 
-**The firewall blocks everything else inbound.** A dev server, PostgreSQL, or
-Redis on rama is unreachable from another machine until it has a rule: see
+**The firewall blocks everything else inbound.** A dev server or Redis on
+rama is unreachable from another machine until it has a rule: see
 [Open a port](#open-a-port). Connections from rama to itself, outbound
 connections, ping, and `rama.local` name lookups need no rule.
 
@@ -451,8 +451,8 @@ Not carried over, because they are macOS-only:
 - The `sophon` and Proxmox entries in the ssh config. Their keys live on the
   Mac.
 
-Different versions: apt provides PostgreSQL 18 and Redis 8.0, where the Mac has
-`postgresql@17`.
+No PostgreSQL server: the Mac has `postgresql@17`, and rama has only `libpq-dev`,
+the headers the `pg` gem builds against.
 
 ## Not done yet
 
