@@ -325,6 +325,7 @@ runs again only when its rendered content changes.
 | `after_08_hide_zfs_member` | Installs a udev rule that makes udisks ignore ZFS pool members, so the dock and Files stop listing the root pool as an unmountable `rpool` volume | the script changes |
 | `after_09_sshd_lockdown` | Installs `sshd-rama.conf` as an sshd drop-in, checks it with `sshd -t` and `sshd -T`, rolls it back if either fails, and reloads sshd; fails on a key line without `restrict` | `sshd-rama.conf` or the key file changes |
 | `after_10_firewall` | Blocks inbound connections with ufw, adds the rules in `ufw-rules.txt`, and enables the firewall; skips itself where ufw cannot run | `ufw-rules.txt` changes |
+| `after_12_mouse_scroll` | Turns on natural scrolling for the mouse wheel; skips itself where GNOME is not installed, and fails outside a desktop session, so a later apply retries | the script changes |
 
 `before_` scripts run before chezmoi writes any file; `after_` scripts run
 after, because script 04 reads `~/.config/mise/config.toml` and script 09
