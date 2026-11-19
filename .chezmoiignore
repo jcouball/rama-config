@@ -6,7 +6,6 @@
 # .chezmoiscripts, .chezmoi.toml.tmpl) are ignored by chezmoi automatically.
 
 apt-packages.txt
-certification
 dock-favorites.txt
 dock-settings.txt
 snap-packages.txt
