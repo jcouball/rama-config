@@ -1,7 +1,6 @@
 # rama-config
 
-The configuration of `rama`, an x86_64 machine running Ubuntu 26.04 LTS
-Desktop. It is managed by [chezmoi](https://www.chezmoi.io/).
+The configuration of `rama`, an x86_64 machine running Ubuntu 26.10 Desktop. It is managed by [chezmoi](https://www.chezmoi.io/).
 
 rama has two jobs:
 
@@ -46,9 +45,51 @@ Two consequences of the principle:
   them. Snaps also update on their own schedule. Snap is acceptable for GUI
   applications.
 
+## Install Ubuntu
+
+rama is a Dell Inspiron 3880 desktop with one 238 GB NVMe disk. Install from
+the Ubuntu 26.10 Desktop ISO, with the network cable plugged in. The installer
+shows these screens in this order; its wording changes between releases, so
+match each by what it asks.
+
+| Screen | Choice |
+| --- | --- |
+| Language | English |
+| Accessibility | Nothing |
+| Keyboard | English (US) |
+| Network | The wired connection. Wi-Fi is not used |
+| Try or install | Install Ubuntu |
+| Interactive or automated | Interactive installation |
+| Which apps to install | Default selection, the minimal desktop. Not the extended selection |
+| Extra software | Leave both boxes unticked: third-party drivers, and support for more media formats |
+| Disk setup | Erase the disk and install Ubuntu. Under the advanced features, ZFS, without encryption |
+| Account | Name `James Couball`, computer name `rama`, username `james`, and a password required to log in |
+| Time zone | `America/Los_Angeles` |
+
+Why these:
+
+- **26.10, not 26.04 LTS.** 26.10 is what the scripts have run on. It is an
+  interim release: see [Updates](#updates) for when it has to be upgraded.
+- **The minimal desktop and no extras.** The lists in this repo are the whole
+  inventory of what is installed on top of Ubuntu. The Inspiron's Intel
+  graphics needs no proprietary driver.
+- **ZFS.** The installer labels it experimental. It puts the root pool,
+  `rpool`, on the fourth partition, after the EFI, `/boot`, and swap
+  partitions it creates. Script 08 exists because of this choice.
+- **No encryption.** rama stays at home and has to come back from a reboot
+  with nobody at the keyboard, so that other machines can drive it over ssh.
+  Anyone who takes the disk can read it, including the `gh` and Claude Code
+  sign-ins. The installer is the only place to change this.
+- **The username `james`.** The ssh client entry under
+  [Set up a client](#set-up-a-client) logs in as `james`.
+- **The computer name `rama`.** chezmoi asks for the host name and offers the
+  current one as the default, so naming the machine here makes that answer
+  Enter.
+
 ## Rebuild from nothing
 
-On a fresh Ubuntu 26.04 install:
+On the fresh install, in a terminal on the desktop, not over ssh: the scripts
+that set the terminal font, the dock, and the mouse need the desktop session.
 
 ```bash
 # 1. What the next command needs.
@@ -425,8 +466,9 @@ topgrade.
 **Snaps are not topgrade's job.** snapd refreshes them itself, several times a
 day.
 
-**Nothing here moves rama to the next Ubuntu release.** Going from 26.04 to
-28.04 is `sudo do-release-upgrade`, run by hand.
+**Nothing here moves rama to the next Ubuntu release.** 26.10 is an interim
+release, supported for nine months, until about July 2027. Before then, move
+to 27.04 with `sudo do-release-upgrade`, run by hand.
 
 ## Differences from neuromancer-config
 
