@@ -46,15 +46,19 @@ rewrite() {
   mv "$tmp" "$file"
 }
 
+# Read both values before writing either file. A failed read exits here, with
+# the lists untouched: a list emptied by a failure would make the next apply
+# unpin every launcher or reset every dock setting.
+favorites=$(gsettings get org.gnome.shell favorite-apps)
+settings=$(dconf dump "$dock_path")
+
 # gsettings prints ['a.desktop', 'b.desktop']; put each name on its own line.
-gsettings get org.gnome.shell favorite-apps \
-  | { grep -o "'[^']*'" || true; } \
+{ grep -o "'[^']*'" <<<"$favorites" || true; } \
   | tr -d "'" \
   | rewrite dock-favorites.txt
 
 # dconf dump prints a [/] group line, then one key=value line per setting.
-dconf dump "$dock_path" \
-  | { grep -v -e '^\[' -e '^$' || true; } \
+{ grep -v -e '^\[' -e '^$' <<<"$settings" || true; } \
   | rewrite dock-settings.txt
 
 echo ">> Wrote dock-favorites.txt and dock-settings.txt in $source_dir."
