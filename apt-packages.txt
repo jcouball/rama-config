@@ -32,6 +32,10 @@ sqlite3
 # fc-cache, which script 07 runs after downloading the terminal font
 fontconfig
 
+# dconf, which script 11 and dock-capture use to list the dock settings that
+# differ from the defaults
+dconf-cli
+
 # Headers and tools for compiling Ruby. mise installs a precompiled Ruby when
 # one exists, so these matter for a version it has to build from source, and
 # for gems with native extensions (psych, openssl, ffi).

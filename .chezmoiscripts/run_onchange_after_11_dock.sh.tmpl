@@ -92,22 +92,30 @@ if ! grep -qx "$dock_schema" <<<"$schemas"; then
   exit 0
 fi
 
-# dconf dump lists the settings that differ from the defaults. Reset each one
-# the list does not name.
-if command -v dconf >/dev/null; then
-  while IFS= read -r line; do
-    case "$line" in
-      ''|\[*) continue ;;
-    esac
-    key="${line%%=*}"
-    if [ -z "${settings[$key]+set}" ]; then
-      echo ">> Resetting dock setting $key to its default. It was: ${line#*=}"
-      gsettings reset "$dock_schema" "$key"
-    fi
-  done < <(dconf dump "$dock_path")
-else
-  echo ">> dconf is not installed: dock settings missing from the list are left alone."
+# dconf dump lists the settings that differ from the defaults. Without it the
+# settings the list does not name cannot be found, so failing here, instead of
+# skipping, keeps run_onchange_ from recording the script as run. The dump is
+# read into a variable so that a failed dump fails the script too.
+if ! command -v dconf >/dev/null; then
+  echo "❌ dconf is not installed. It is in the dconf-cli package." >&2
+  exit 1
 fi
+if ! changed=$(dconf dump "$dock_path"); then
+  echo "❌ dconf could not list the dock settings." >&2
+  exit 1
+fi
+
+# Reset each changed setting the list does not name.
+while IFS= read -r line; do
+  case "$line" in
+    ''|\[*) continue ;;
+  esac
+  key="${line%%=*}"
+  if [ -z "${settings[$key]+set}" ]; then
+    echo ">> Resetting dock setting $key to its default. It was: ${line#*=}"
+    gsettings reset "$dock_schema" "$key"
+  fi
+done <<<"$changed"
 
 for key in "${!settings[@]}"; do
   value="${settings[$key]}"
