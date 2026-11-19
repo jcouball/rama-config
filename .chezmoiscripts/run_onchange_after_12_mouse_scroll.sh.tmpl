@@ -1,0 +1,33 @@
+#!/bin/bash
+#
+# Turn on natural scrolling for the mouse wheel: rolling the wheel up moves
+# the content up, as it does on the touchpad and on the Mac. GNOME's default
+# for a mouse is the opposite. The setting lives in dconf, not in a file
+# chezmoi can manage.
+
+set -euo pipefail
+
+if [ "$(id -u)" -eq 0 ]; then
+  echo "❌ Do not run 'sudo chezmoi apply'." >&2
+  echo "   Instead:  sudo -v && chezmoi apply" >&2
+  exit 1
+fi
+
+schema=org.gnome.desktop.peripherals.mouse
+
+# Skipped where GNOME is not installed, such as a server.
+if ! gsettings list-schemas 2>/dev/null | grep -qx "$schema"; then
+  echo ">> Skipping the mouse scroll direction: GNOME is not installed."
+  exit 0
+fi
+
+# gsettings needs the desktop session's bus. Failing instead of skipping keeps
+# run_onchange_ from recording the script as run, so the next apply retries.
+if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
+  echo "❌ Setting the mouse scroll direction needs a desktop session, not SSH or a TTY." >&2
+  echo "   Run 'chezmoi apply' from a terminal on the desktop." >&2
+  exit 1
+fi
+
+echo ">> Turning on natural scrolling for the mouse wheel..."
+gsettings set "$schema" natural-scroll true
