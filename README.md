@@ -476,58 +476,105 @@ to 27.04 with `sudo do-release-upgrade`, run by hand.
 
 ## Certify the rebuild
 
-`certification/certify.sh` runs [Rebuild from nothing](#rebuild-from-nothing)
-in a fresh `ubuntu:26.04` container and says whether it worked. It needs
-docker and git on the machine it runs on, and changes nothing there apart from
-pulling the image and writing a log.
+Certification has two scripts, as in neuromancer-config:
+
+- `certification/certify.sh` runs [Rebuild from nothing](#rebuild-from-nothing)
+  in a fresh `ubuntu:26.04` container, then runs `verify.sh` in it.
+- `certification/verify.sh` checks a machine by its outcomes: what is
+  installed, what is set, what resolves. It also runs on rama itself.
+
+### Rebuild in a container
 
 ```bash
 ./certification/certify.sh                  # certify main
 ./certification/certify.sh --branch <name>  # certify a branch before it merges
 ./certification/certify.sh --keep           # leave the container for inspection
+./certification/certify.sh --verify-only    # re-run the checks in a kept container
 ```
 
+It needs docker and git on the machine it runs on, and changes nothing there
+apart from pulling the image and writing logs.
+
 Run it for a change to a script under `.chezmoiscripts`, to one of the package
-lists, to `.chezmoi.toml.tmpl`, or to anything else a rebuild runs or reads.
-Certify the change from its branch, before it merges. A run takes about eight
-minutes on rama.
+lists, to `.chezmoi.toml.tmpl`, to `verify.sh`, or to anything else a rebuild
+runs or reads. Certify the change from its branch, before it merges. A run
+takes about eight minutes on rama.
 
-The container clones the repo from GitHub, as the README's command does, so
-the branch has to be pushed. The script stops before starting a container if
-the branch is not on GitHub.
+The container clones the repo from GitHub, as the README's command does, and
+`verify.sh` comes from the local checkout, copied at the start of the run. So
+for a branch the script stops before starting a container unless all three of
+these hold:
 
-The transcript goes to `certification/logs/`, which git ignores. It ends with
-the commit and the tree the container built, the architecture, and the verdict.
-Put the commit and the verdict in the pull request.
+- the branch is pushed,
+- the local checkout is at the commit the branch has on GitHub, and
+- `certification/verify.sh` has no uncommitted changes.
 
-**The verdict.** CERTIFIED needs all three of:
+The transcripts go to `certification/logs/`, which git ignores:
+`bootstrap-<stamp>[-<branch>].log`, `verify-<stamp>[-<branch>].log`, and the
+copy of `verify.sh` that produced the second. The bootstrap log ends with the
+commit and the tree the container built. Put the commit and the verdict in the
+pull request.
 
-- `chezmoi init --apply` exited 0,
-- `chezmoi status` afterwards ran and printed nothing, and
+**The verdict.** CERTIFIED needs both of:
+
+- the last line `verify.sh` printed is its `VERIFY-COMPLETE` record, and the
+  record counts no failed check, and
 - the commit the container built is the one GitHub named before the run
   started.
 
-It does not check outcomes beyond that, such as whether a runtime resolves or
-the login shell is zsh.
+The exit status of the bootstrap is reported and decides nothing. `verify.sh`
+runs whatever it was, because a script that exits 0 has proved nothing.
 
-**What a pass does not cover:**
+`--verify-only` never certifies. It re-runs the checks in a container that a
+run with `--keep` left, and says whether they passed. It did not rebuild the
+container and does not know which commit it holds, so its result is for
+looking into a failure, not for the pull request.
 
-- **systemd.** A container has none, so the host name, snap and firewall
-  steps skip themselves, and script 09 installs the sshd settings without
-  reloading sshd.
+**What a pass does not cover.** `verify.sh` reports each of these as `SKIP`,
+and counts it as excluded:
+
+- **systemd.** A container has none, so the host name, the snaps, the
+  firewall and a running sshd are not verified.
 - **udev.** No udevd runs in a container, so script 08 writes its rule and
-  skips the reload and the trigger. Those two commands run only on a real
-  machine, and only on an apply that finds the rule missing or different.
+  skips the reload and the trigger. Whether the rule is in force is not
+  verified.
 - **A desktop session.** GNOME is not installed in the container, so the
-  terminal font, dock and mouse scripts skip themselves.
-- **The other architecture.** The container has the architecture of the
-  machine it runs on. On rama that is amd64, and everything is installed. On an
-  Apple silicon Mac it is arm64, where the amd64-only packages (the 1Password
-  app, Chrome, Slack) are not. Certify on rama.
+  terminal font, the dock and the mouse are not verified.
+
+A run in a container on rama ends with 6 excluded. `verify.sh` on rama itself
+covers all six.
+
+The container has the architecture of the machine it runs on. This repo
+targets amd64: on an Apple silicon Mac the container is arm64, the amd64-only
+packages are not installed, and `verify.sh` fails on them. Certify on rama.
 
 The script's header names each place it departs from the README's procedure:
 it makes a user first, because the image has only root; it answers the host
 name question with `--promptString`; and it passes `--branch` when asked to.
+
+### Verify the machine
+
+On rama, in a terminal:
+
+```bash
+sudo -v && ./certification/verify.sh
+```
+
+`sudo -v` first, because sshd's effective settings and the firewall's rules
+can only be read as root. Without it those two checks print `WARN` and the
+rest run. Nothing is skipped on rama: a clean run ends with 0 warnings and
+0 excluded.
+
+What `verify.sh` expects comes from the chezmoi source directory on the machine
+it runs on: the package lists, the firewall rules, the dock, the sshd settings.
+So a machine is checked against the commit it was built from, and those files
+are not repeated in the script.
+
+Each check prints one line: `PASS`, `FAIL`, `WARN` or `SKIP`. `WARN` means
+something unexpected that is worth a look. `SKIP` means the machine cannot have
+the thing at all, as a container cannot have a desktop. The last line is
+`VERIFY-COMPLETE` with the four counts, and the exit status is 1 if any check
+failed.
 
 ## Differences from neuromancer-config
 
@@ -557,11 +604,12 @@ the headers the `pg` gem builds against.
 
 ## Not done yet
 
-- **A run on rama.** The procedure has run to completion in a container, on
-  arm64 and on amd64. A container has no systemd, no udevd and no desktop
-  session, so the host name, snap, firewall, terminal font, dock and mouse
-  steps skipped themselves, sshd was not reloaded, and the udev rule was
-  written but not loaded. Those run for the first time on rama.
+- **A rebuild of rama.** The procedure has run to completion in a container.
+  A container has no systemd, no udevd and no desktop session, so the host
+  name, snap, firewall, terminal font, dock and mouse steps skipped
+  themselves, sshd was not reloaded, and the udev rule was written but not
+  loaded. `verify.sh` checks the outcome of every one of those on rama as it
+  stands, but rama has not been rebuilt from nothing by these scripts.
 - **A real topgrade run.** `topgrade --dry-run` in the container printed the
   commands listed under [Updates](#updates). It has not been run for real.
 - **GitHub rate limits.** mise asks the GitHub API for release information.
