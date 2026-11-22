@@ -34,8 +34,9 @@
 #
 #   - No systemd. The host name, snap, sshd reload and firewall steps skip
 #     themselves.
-#   - No desktop session. The terminal font, dock and mouse scripts cannot do
-#     their work.
+#   - No udevd. Script 08 writes its udev rule and skips loading it.
+#   - No desktop session. The terminal font, dock and mouse scripts skip
+#     themselves.
 #   - One architecture. The container has the host's: arm64 on an Apple
 #     silicon Mac, where the amd64-only packages (1Password, Chrome, Slack) are
 #     not installed, and amd64 on rama. The log names it.

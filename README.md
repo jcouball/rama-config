@@ -515,6 +515,9 @@ the login shell is zsh.
 - **systemd.** A container has none, so the host name, snap and firewall
   steps skip themselves, and script 09 installs the sshd settings without
   reloading sshd.
+- **udev.** No udevd runs in a container, so script 08 writes its rule and
+  skips the reload and the trigger. Those two commands run only on a real
+  machine, and only on an apply that finds the rule missing or different.
 - **A desktop session.** GNOME is not installed in the container, so the
   terminal font, dock and mouse scripts skip themselves.
 - **The other architecture.** The container has the architecture of the
@@ -555,9 +558,10 @@ the headers the `pg` gem builds against.
 ## Not done yet
 
 - **A run on rama.** The procedure has run to completion in a container, on
-  arm64 and on amd64. A container has no systemd and no desktop session, so
-  the host name, snap, firewall, terminal font, dock and mouse steps skipped
-  themselves, and sshd was not reloaded. Those run for the first time on rama.
+  arm64 and on amd64. A container has no systemd, no udevd and no desktop
+  session, so the host name, snap, firewall, terminal font, dock and mouse
+  steps skipped themselves, sshd was not reloaded, and the udev rule was
+  written but not loaded. Those run for the first time on rama.
 - **A real topgrade run.** `topgrade --dry-run` in the container printed the
   commands listed under [Updates](#updates). It has not been run for real.
 - **GitHub rate limits.** mise asks the GitHub API for release information.
