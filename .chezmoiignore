@@ -1,8 +1,8 @@
 # Source files that must never be deployed to the home directory.
 #
 # Anything in the source root without a leading dot becomes a target: without
-# these lines chezmoi would write ~/README.md, ~/LICENSE.txt and
-# ~/apt-packages.txt. Dot-prefixed source entries (.gitattributes,
+# these lines chezmoi would write ~/README.md, ~/LICENSE.txt,
+# ~/apt-packages.txt and a whole ~/certification directory. Dot-prefixed source entries (.gitattributes,
 # .chezmoiscripts, .chezmoi.toml.tmpl) are ignored by chezmoi automatically.
 
 apt-packages.txt
@@ -12,6 +12,7 @@ snap-packages.txt
 sshd-rama.conf
 ufw-rules.txt
 vscode-extensions.txt
+certification
 CLAUDE.md
 LICENSE.txt
 README.md
