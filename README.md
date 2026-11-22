@@ -16,8 +16,9 @@ repo configures one machine. Shared dotfiles are copied between them, not
 templated, so a change to one machine never needs testing on another.
 
 **Status: tested in a container, not yet on the machine.** The rebuild
-procedure below ran to completion in an `ubuntu:26.04` container. See
-[Not done yet](#not-done-yet) for what that leaves untested.
+procedure below runs to completion in an `ubuntu:26.04` container:
+[Certify the rebuild](#certify-the-rebuild) repeats that test. See
+[Not done yet](#not-done-yet) for what it leaves untested.
 
 ## Principle: conventional Ubuntu
 
@@ -369,7 +370,7 @@ runs again only when its rendered content changes.
 | `after_05_vscode_extensions` | Installs the missing extensions from `vscode-extensions.txt` | `vscode-extensions.txt` changes |
 | `after_06_snap_install` | Installs the missing snaps from `snap-packages.txt`; skips itself where snapd is not running | `snap-packages.txt` changes |
 | `after_07_terminal_font` | Rebuilds the font cache and sets the Ptyxis font to MesloLGS NF; fails outside a desktop session, so a later apply retries | the script changes |
-| `after_08_hide_zfs_member` | Installs a udev rule that makes udisks ignore ZFS pool members, so the dock and Files stop listing the root pool as an unmountable `rpool` volume | the script changes |
+| `after_08_hide_zfs_member` | Installs a udev rule that makes udisks ignore ZFS pool members, so the dock and Files stop listing the root pool as an unmountable `rpool` volume; skips the reload where udevd is not running | the script changes |
 | `after_09_sshd_lockdown` | Installs `sshd-rama.conf` as an sshd drop-in, checks it with `sshd -t` and `sshd -T`, rolls it back if either fails, and reloads sshd; fails on a key line without `restrict` | `sshd-rama.conf` or the key file changes |
 | `after_10_firewall` | Blocks inbound connections with ufw, adds the rules in `ufw-rules.txt`, and enables the firewall; skips itself where ufw cannot run | `ufw-rules.txt` changes |
 | `after_11_dock` | Sets the dock's pinned launchers to `dock-favorites.txt` and its settings to `dock-settings.txt`, resetting every other dock setting to its default; fails outside a desktop session, so a later apply retries | either list changes |
@@ -473,6 +474,58 @@ day.
 release, supported for nine months, until about July 2027. Before then, move
 to 27.04 with `sudo do-release-upgrade`, run by hand.
 
+## Certify the rebuild
+
+`certification/certify.sh` runs [Rebuild from nothing](#rebuild-from-nothing)
+in a fresh `ubuntu:26.04` container and says whether it worked. It needs
+docker and git on the machine it runs on, and changes nothing there apart from
+pulling the image and writing a log.
+
+```bash
+./certification/certify.sh                  # certify main
+./certification/certify.sh --branch <name>  # certify a branch before it merges
+./certification/certify.sh --keep           # leave the container for inspection
+```
+
+Run it for a change to a script under `.chezmoiscripts`, to one of the package
+lists, to `.chezmoi.toml.tmpl`, or to anything else a rebuild runs or reads.
+Certify the change from its branch, before it merges. A run takes about eight
+minutes on rama.
+
+The container clones the repo from GitHub, as the README's command does, so
+the branch has to be pushed. The script stops before starting a container if
+the branch is not on GitHub.
+
+The transcript goes to `certification/logs/`, which git ignores. It ends with
+the commit and the tree the container built, the architecture, and the verdict.
+Put the commit and the verdict in the pull request.
+
+**The verdict.** CERTIFIED needs all three of:
+
+- `chezmoi init --apply` exited 0,
+- `chezmoi status` afterwards ran and printed nothing, and
+- the commit the container built is the one GitHub named before the run
+  started.
+
+It does not check outcomes beyond that, such as whether a runtime resolves or
+the login shell is zsh.
+
+**What a pass does not cover:**
+
+- **systemd.** A container has none, so the host name, snap and firewall
+  steps skip themselves, and script 09 installs the sshd settings without
+  reloading sshd.
+- **A desktop session.** GNOME is not installed in the container, so the
+  terminal font, dock and mouse scripts skip themselves.
+- **The other architecture.** The container has the architecture of the
+  machine it runs on. On rama that is amd64, and everything is installed. On an
+  Apple silicon Mac it is arm64, where the amd64-only packages (the 1Password
+  app, Chrome, Slack) are not. Certify on rama.
+
+The script's header names each place it departs from the README's procedure:
+it makes a user first, because the image has only root; it answers the host
+name question with `--promptString`; and it passes `--branch` when asked to.
+
 ## Differences from neuromancer-config
 
 | | neuromancer (macOS) | rama (Ubuntu) |
@@ -501,26 +554,15 @@ the headers the `pg` gem builds against.
 
 ## Not done yet
 
-- **A run on rama.** The container test was arm64, because Docker's x86_64
-  emulation on an Apple silicon Mac cannot extract tar files under Ubuntu
-  26.04. One arm64-only failure turned up (`checkov`, now fixed); an
-  x86_64-only failure is possible and would show on rama. The container has no
-  systemd either, so the host name and sshd steps skipped themselves. Both run
-  for the first time on rama.
-- **A certification script.** The container test was run by hand. To repeat
-  it: start an `ubuntu:26.04` container, create a non-root user with
-  passwordless sudo, copy this repo to `~/.local/share/chezmoi`, and run step 2
-  of [Rebuild from nothing](#rebuild-from-nothing) with
-  `init --apply --promptString "Host name=rama"` and no repo name.
+- **A run on rama.** The procedure has run to completion in a container, on
+  arm64 and on amd64. A container has no systemd and no desktop session, so
+  the host name, snap, firewall, terminal font, dock and mouse steps skipped
+  themselves, and sshd was not reloaded. Those run for the first time on rama.
 - **A real topgrade run.** `topgrade --dry-run` in the container printed the
   commands listed under [Updates](#updates). It has not been run for real.
 - **GitHub rate limits.** mise asks the GitHub API for release information.
   The container run did not hit the unauthenticated limit. If a rebuild does,
   set `GITHUB_TOKEN` and run `chezmoi apply` again.
-- **An install of the amd64-only packages.** The 1Password app, Chrome, and
-  Slack cannot be installed in the arm64 container. Their repositories and
-  signing keys were checked there, with the architecture forced to amd64, and
-  nothing more. Script 03 as a whole was run with the installs simulated.
 - **A snap install.** The container has no snapd, so script 06 has only run
   there with a stand-in `snap` command.
 - **More GUI applications.** VS Code, 1Password, Chrome, Slack, Warp, and
