@@ -35,6 +35,15 @@ fi
 
 echo ">> Installing $RULE_FILE..."
 echo "$RULE" | sudo tee "$RULE_FILE" >/dev/null
+
+# udevd reads its rules when it starts, so a reload is only needed where it is
+# already running. Where it is not, such as a container, `udevadm control`
+# fails with "Failed to send reload request", and there is nothing to reload.
+if [ ! -S /run/udev/control ]; then
+  echo ">> udevd is not running here; the rule takes effect when it starts."
+  exit 0
+fi
+
 sudo udevadm control --reload
 sudo udevadm trigger --subsystem-match=block
 echo ">> Done. If the dock still shows the volume, log out and back in."
