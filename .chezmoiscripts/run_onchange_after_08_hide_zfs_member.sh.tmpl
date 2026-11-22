@@ -34,6 +34,10 @@ if ! sudo -n true 2>/dev/null && [ ! -t 0 ]; then
 fi
 
 echo ">> Installing $RULE_FILE..."
+# The directory comes with the udev package. Where udev is not installed, such
+# as an arm64 container, it is missing and the write below fails. Making it is
+# harmless, and puts the rule in place for a udev installed later.
+sudo mkdir -p "$(dirname "$RULE_FILE")"
 echo "$RULE" | sudo tee "$RULE_FILE" >/dev/null
 
 # udevd reads its rules when it starts, so a reload is only needed where it is
