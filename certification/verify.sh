@@ -21,7 +21,7 @@
 # So the machine is checked against the commit it was built from, and nothing
 # here has to be kept in step with those files by hand.
 #
-# The output is the interface, and is the same as neuromancer-config's
+# The output is the interface, and is the same as mac-dev-config's
 # verify.sh: sections, one PASS / FAIL / WARN / SKIP line per check, a summary,
 # and a last line of
 #

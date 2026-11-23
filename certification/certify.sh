@@ -56,7 +56,7 @@
 
 set -euo pipefail
 
-REPO="${CERT_REPO:-jcouball/rama-config}"
+REPO="${CERT_REPO:-jcouball/ubuntu-dev-config}"
 IMAGE="${CERT_IMAGE:-ubuntu:26.04}"
 CERT_USER="${CERT_USER:-certuser}"
 HOST_NAME="${CERT_HOST_NAME:-rama}"
