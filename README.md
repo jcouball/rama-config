@@ -361,6 +361,132 @@ off. If either check fails it puts the previous file back and fails the apply.
 An edit made directly in `/etc/ssh/sshd_config.d/00-rama.conf` lasts until the
 next apply that runs the script.
 
+## Deploy key
+
+`chezmoi update` fetches this repo over https with no credential, because the
+repo is public. A push needs one. `gh`'s login is kept in the desktop keyring,
+which an ssh session can read only while james is logged in at rama's desktop.
+After a restart with nobody logged in, a push over ssh fails with
+`could not read Username`.
+
+So rama has a deploy key: an ssh key that GitHub accepts for this repo alone,
+with write access. Only a push from the chezmoi source uses it. It is there so
+a certification can be recorded as a tag from an ssh session
+([issue 16](https://github.com/jcouball/ubuntu-dev-config/issues/16)).
+
+| What | Where |
+| --- | --- |
+| Private key, no passphrase | `~/.ssh/id_ed25519_ubuntu_dev_config_deploy` on rama |
+| Public key | this repo's deploy keys on GitHub, titled `rama: push certified tags`, with write access |
+| GitHub's host keys | `~/.ssh/known_hosts` on rama |
+| Push URL and ssh command | the git config of the chezmoi source, `~/.local/share/chezmoi/.git/config` |
+
+The key has no passphrase because the push runs with nobody there to type one.
+
+**None of this is managed by chezmoi.** The key is a secret made by hand on the
+machine, and the two settings are in the chezmoi source's own git config, which
+a new `chezmoi init` does not have. After a rebuild, set it up again with a new
+key and delete the old one from GitHub. The key is not in 1Password: it is
+useful on rama alone, and making a new one takes less time than restoring it.
+
+**What the key can do.** Read this repo, and push to it: create, move and
+delete tags, and branches other than `main`. It cannot change `main`, which
+takes changes only through a pull request, and it opens nothing in any other
+repo.
+
+### Set up the deploy key
+
+On rama, make the key:
+
+```bash
+ssh-keygen -t ed25519 -N "" -C "rama deploy key for ubuntu-dev-config" \
+  -f ~/.ssh/id_ed25519_ubuntu_dev_config_deploy
+```
+
+Register its public half with write access. This needs `gh` logged in, so run
+it in a terminal at rama's desktop, or copy the `.pub` file to another machine
+and run it there:
+
+```bash
+gh repo deploy-key add ~/.ssh/id_ed25519_ubuntu_dev_config_deploy.pub \
+  -R jcouball/ubuntu-dev-config -w -t "rama: push certified tags"
+```
+
+Add GitHub's host keys. They come from GitHub's API over https, so they are not
+taken on trust from the first ssh connection:
+
+```bash
+curl -fsSL https://api.github.com/meta \
+  | jq -r '.ssh_keys[] | "github.com \(.)"' >> ~/.ssh/known_hosts
+chmod 600 ~/.ssh/known_hosts
+```
+
+Point pushes from the chezmoi source at the key. The fetch URL stays https, so
+`chezmoi update` is unchanged:
+
+```bash
+cd "$(chezmoi source-path)"
+git config --local remote.origin.pushurl git@github.com:jcouball/ubuntu-dev-config.git
+git config --local core.sshCommand \
+  "ssh -i ~/.ssh/id_ed25519_ubuntu_dev_config_deploy -o IdentitiesOnly=yes -o BatchMode=yes"
+```
+
+Check it from an ssh session, with nobody logged in at the desktop. This pushes
+nothing:
+
+```bash
+cd "$(chezmoi source-path)"
+GIT_TERMINAL_PROMPT=0 git push --dry-run origin HEAD:refs/tags/certified/push-check
+```
+
+It prints ` * [new tag]         HEAD -> certified/push-check`.
+
+`~/.ssh/config` is managed by chezmoi and is not involved: the key is named in
+`core.sshCommand`, not in a `Host` block.
+
+### Replace the deploy key
+
+Delete the old key from GitHub, then from rama:
+
+```bash
+gh repo deploy-key list -R jcouball/ubuntu-dev-config
+gh repo deploy-key delete <id> -R jcouball/ubuntu-dev-config
+rm ~/.ssh/id_ed25519_ubuntu_dev_config_deploy ~/.ssh/id_ed25519_ubuntu_dev_config_deploy.pub
+```
+
+Then make and register a new one as in
+[Set up the deploy key](#set-up-the-deploy-key). The host keys and the two git
+settings are still in place, so finish with the dry-run push.
+
+### If the deploy key is compromised
+
+Treat the key as compromised if rama's disk, a backup of james's home
+directory, or the key file itself has been somewhere it should not be.
+
+1. **Delete the key from GitHub first.** GitHub refuses it from that moment.
+   This can be done from any machine where `gh` is logged in, or in a browser
+   under the repo's Settings, Deploy keys:
+
+   ```bash
+   gh repo deploy-key list -R jcouball/ubuntu-dev-config
+   gh repo deploy-key delete <id> -R jcouball/ubuntu-dev-config
+   ```
+
+2. **Look for pushes you did not make.** The repo's
+   [Activity](https://github.com/jcouball/ubuntu-dev-config/activity) page
+   lists every push, including branches and tags that were created or deleted.
+   `main` cannot have been changed. A tag can have been moved or deleted, so
+   compare the tags with what you expect:
+
+   ```bash
+   git ls-remote --tags origin
+   ```
+
+3. **Make a new key**, as in [Replace the deploy key](#replace-the-deploy-key).
+4. **Find out how the key got out.** It was readable by anything that could
+   read james's files on rama, and so was everything else in that home
+   directory.
+
 ## Scripts
 
 chezmoi runs these in order during `chezmoi apply`. Each is `run_onchange_`: it
