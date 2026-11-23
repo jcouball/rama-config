@@ -1,4 +1,4 @@
-# rama-config
+# ubuntu-dev-config
 
 The configuration of `rama`, an x86_64 machine running Ubuntu 26.10 Desktop. It is managed by [chezmoi](https://www.chezmoi.io/).
 
@@ -10,10 +10,12 @@ rama has two jobs:
   used for Windows.
 
 This repo is a sibling of
-[neuromancer-config](https://github.com/jcouball/neuromancer-config) (macOS)
-and [sophon-config](https://github.com/jcouball/sophon-config) (Windows). Each
-repo configures one machine. Shared dotfiles are copied between them, not
-templated, so a change to one machine never needs testing on another.
+[mac-dev-config](https://github.com/jcouball/mac-dev-config) (macOS)
+and [windows-dev-config](https://github.com/jcouball/windows-dev-config)
+(Windows). Each repo configures one operating system, and this one currently
+configures one machine, rama. Shared dotfiles are copied between the repos,
+not templated, so a change to one operating system never needs testing on
+another.
 
 **Status: tested in a container, not yet on the machine.** The rebuild
 procedure below runs to completion in an `ubuntu:26.04` container:
@@ -98,7 +100,7 @@ sudo apt-get update && sudo apt-get install -y curl git
 
 # 2. Everything else.
 sudo -v && sh -c "$(curl -fsLS get.chezmoi.io)" -- -b /tmp/chezmoi-bootstrap \
-  init --apply jcouball/rama-config
+  init --apply jcouball/ubuntu-dev-config
 ```
 
 Step 2 downloads a temporary copy of chezmoi and runs it. It asks what the
@@ -230,7 +232,7 @@ directly and applies a project's own `mise.toml` or `.tool-versions` on `cd`.
 Other machines on the LAN run commands and tests on rama over ssh. A session
 logs in as `james`, who has sudo and is in the `docker` group, so a login is
 close to root access. Three things limit who gets one, the same three
-[sophon-config](https://github.com/jcouball/sophon-config) uses:
+[windows-dev-config](https://github.com/jcouball/windows-dev-config) uses:
 
 - **Keys only.** [sshd-rama.conf](sshd-rama.conf) is installed as
   `/etc/ssh/sshd_config.d/00-rama.conf`. It allows public keys alone, so the
@@ -476,7 +478,7 @@ to 27.04 with `sudo do-release-upgrade`, run by hand.
 
 ## Certify the rebuild
 
-Certification has two scripts, as in neuromancer-config:
+Certification has two scripts, as in mac-dev-config:
 
 - `certification/certify.sh` runs [Rebuild from nothing](#rebuild-from-nothing)
   in a fresh `ubuntu:26.04` container, then runs `verify.sh` in it.
@@ -576,7 +578,7 @@ the thing at all, as a container cannot have a desktop. The last line is
 `VERIFY-COMPLETE` with the four counts, and the exit status is 1 if any check
 failed.
 
-## Differences from neuromancer-config
+## Differences from mac-dev-config
 
 | | neuromancer (macOS) | rama (Ubuntu) |
 | --- | --- | --- |
