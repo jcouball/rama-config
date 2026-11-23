@@ -17,8 +17,10 @@
 # The container clones the repo from GitHub, so a branch has to be pushed.
 # verify.sh comes from this checkout, so for a branch run the checkout has to
 # be at the branch's commit. The transcripts go to certification/logs/, and the
-# bootstrap log ends with the commit the container built. Put that commit and
-# the verdict in the pull request.
+# bootstrap log ends with the commit the container built and the verdict.
+#
+# A CERTIFIED run is recorded afterwards with ./certification/record.sh, on
+# rama.
 #
 # THE DEVIATIONS
 #
@@ -31,9 +33,13 @@
 #                      sudo because nobody is there to type a password.
 #   2. --promptString  Nobody is there to answer chezmoi's one question, so
 #                      the host name is given up front.
-#   3. --branch <name> Only in a run started with --branch. The README's
-#                      command clones main; this makes chezmoi clone the named
-#                      branch, so a change can be certified before it merges.
+#   3. --branch <name> In every run. The README's command clones stable, the
+#                      branch that holds what has been certified. This clones
+#                      what is about to be: main, or the branch named with
+#                      --branch, so a change can be certified before it
+#                      merges. Once a run is recorded, stable is moved to the
+#                      commit it built, and the README's command then clones
+#                      the same files.
 #
 # WHAT A PASS DOES NOT COVER
 #
@@ -256,7 +262,10 @@ if [ "$VERIFY_ONLY" -eq 0 ]; then
 
   # --- Run the bootstrap ---------------------------------------------------
 
-  BRANCH_OPTION="${BRANCH:+--branch $BRANCH }"
+  # Always named, main included. The README's command names stable; left to
+  # itself chezmoi would clone the repo's default branch, and the run would
+  # depend on what that happens to be.
+  BRANCH_OPTION="--branch $TARGET_BRANCH "
 
   # The two steps of "Rebuild from nothing", verbatim, plus deviations 2 and
   # 3. Do not "improve" them here -- the point is to test what the README says.
@@ -320,6 +329,9 @@ sudo -v && sh -c "$(curl -fsLS get.chezmoi.io)" -- -b /tmp/chezmoi-bootstrap \
     COMMIT_PROBLEM="The commit the container built could not be read. The bootstrap may have failed before the clone."
   fi
   note "Architecture: $(docker exec "$CONTAINER" uname -m)"
+  # One line that says what kind of clean machine this was, for record.sh to
+  # put in the tag. A tag made from a container run must not read as more.
+  note "Machine:      container, $IMAGE, $(docker exec "$CONTAINER" uname -m)"
   note "Bootstrap:    exited $INIT_STATUS"
   [ -z "$COMMIT_PROBLEM" ] || note "$COMMIT_PROBLEM"
 fi
@@ -383,6 +395,21 @@ if [ "$VERIFY_ONLY" -eq 0 ] && [ -n "$BUILT_COMMIT" ]; then
   printf '   Branch: %s\n   Commit: %s\n   Tree:   %s\n' "$TARGET_BRANCH" "$BUILT_COMMIT" "$BUILT_TREE"
 fi
 
+# The verdict and the name of the verify log, written to the end of the
+# bootstrap log. record.sh reads them there: it tags a run only when this line
+# says CERTIFIED, so it never has to work the verdict out again from the parts.
+# A --verify-only run has no bootstrap log and is never a certification.
+if [ "$VERIFY_ONLY" -eq 0 ]; then
+  {
+    printf 'Verify log: %s\n' "$(basename "$VERIFY_LOG")"
+    if [ "$VERIFY_STATUS" -eq 0 ]; then
+      printf 'Verdict: CERTIFIED\n'
+    else
+      printf 'Verdict: NOT CERTIFIED\n'
+    fi
+  } >>"$BOOTSTRAP_LOG"
+fi
+
 if [ "$KEEP" -eq 1 ] || [ "$VERIFY_ONLY" -eq 1 ]; then
   cat >&2 <<KEPT
 
@@ -392,6 +419,34 @@ The container is left running so you can inspect it:
   ./certification/certify.sh --verify-only   # re-check without rebuilding
   docker rm -f $CONTAINER      # when you are done
 KEPT
+fi
+
+if [ "$VERIFY_ONLY" -eq 0 ] && [ "$VERIFY_STATUS" -eq 0 ]; then
+  # The log's path as the shell has to be given it. The command below is there
+  # to be pasted: printed as it is, a path with a space in it would arrive as
+  # two arguments.
+  LOG_ARGUMENT="$(printf '%q' "$BOOTSTRAP_LOG")"
+  if [ -n "$BRANCH" ]; then
+    cat >&2 <<NEXT
+
+To record this certification: merge '$BRANCH', then on rama:
+
+  cd "\$(chezmoi source-path)"
+  sudo -v && chezmoi update
+  ./certification/record.sh --log $LOG_ARGUMENT
+
+--log, because record.sh runs in the chezmoi source and this run's logs are
+here.
+NEXT
+  else
+    cat >&2 <<NEXT
+
+To record this certification, on rama:
+
+  cd "\$(chezmoi source-path)"
+  ./certification/record.sh --log $LOG_ARGUMENT
+NEXT
+  fi
 fi
 
 exit "$VERIFY_STATUS"
