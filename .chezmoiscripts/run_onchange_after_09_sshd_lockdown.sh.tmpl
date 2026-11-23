@@ -14,7 +14,12 @@
 # and `sshd -T` has to report the settings it is for. A drop-in that sorts
 # ahead of this one could set a keyword first, and sshd keeps the first value.
 # If either check fails, the previous file goes back (or the new one is
-# removed) and the apply fails, so the script runs again on the next one.
+# removed) and the apply fails, so the script runs again on the next one. The
+# same happens if the script stops for any other reason between installing the
+# file and passing both checks: a command that fails, or an interrupt. The exit
+# trap does it, so no path leaves an unchecked drop-in behind without saying so.
+# If putting the previous file back fails too, the script says that, and keeps
+# its copy of the previous file and names it.
 #
 # A reload does not end open sessions: each has its own sshd process. So an
 # apply over ssh finishes. A key change needs no reload: sshd reads the key
@@ -70,46 +75,107 @@ if [ -f "$KEYS" ]; then
   done <"$KEYS"
 fi
 
+# `sshd -t` needs the privilege separation directory, which exists only once
+# systemd has made it. Made before the drop-in is touched, so a failure here
+# changes nothing.
+sudo mkdir -p /run/sshd
+
 new="$(mktemp)"
 backup="$(mktemp)"
-trap 'rm -f "$new" "$backup"' EXIT
+had_previous=false
+# True from just before the new drop-in is installed until both checks have
+# passed. While it is true, leaving the script puts the previous file back.
+unchecked=false
+# True once putting the previous file back has failed. The copy then stays.
+keep_backup=false
+
+# Returns non-zero if the file could not be put back or removed. The `|| return`
+# is needed: the caller tests this function's status, and bash ignores `set -e`
+# inside a function called that way.
+restore() {
+  if [ "$had_previous" = true ]; then
+    sudo install -m 0644 -o root -g root "$backup" "$TARGET" || return 1
+    echo "   Restored the previous $TARGET." >&2
+  else
+    sudo rm -f "$TARGET" || return 1
+    echo "   Removed $TARGET." >&2
+  fi
+  # The file is back whether or not the message could be written.
+  return 0
+}
+
+# Runs on every exit, whatever the cause. It does not call `exit`, so the
+# script's own exit status stands.
+#
+# Nothing in it may stop the rollback. Two things could:
+#
+#   - A message that cannot be written: stderr closed, or a pipe whose reader
+#     has gone. So `set -e` is off here.
+#   - A signal. Its handler calls `exit`, and an `exit` while this trap is
+#     running ends the script where it is; the trap does not start again. So
+#     the signals are ignored from here on: a second Ctrl-C does not stop the
+#     rollback it started. The commands the rollback runs start with them
+#     ignored too.
+on_exit() {
+  set +e
+  trap '' INT TERM HUP PIPE
+  if [ "$unchecked" = true ]; then
+    unchecked=false
+    echo "❌ Stopped before the new drop-in passed its checks." >&2
+    if ! restore; then
+      echo "❌ Could not undo the change. $TARGET is still the new drop-in," >&2
+      echo "   and it has not passed its checks." >&2
+      if [ "$had_previous" = true ]; then
+        # The copy is the only way back, so it is not deleted below.
+        keep_backup=true
+        echo "   The previous file is kept at $backup. Put it back by hand:" >&2
+        echo "     sudo install -m 0644 -o root -g root $backup $TARGET" >&2
+      else
+        echo "   There was no previous file. Remove the new one by hand:" >&2
+        echo "     sudo rm $TARGET" >&2
+      fi
+      echo "   Then check the configuration: sudo $SSHD -t" >&2
+    fi
+  fi
+  rm -f "$new"
+  [ "$keep_backup" = true ] || rm -f "$backup"
+}
+trap on_exit EXIT
+# A signal ends the script through `exit`, so the EXIT trap runs for it too.
+trap 'exit 130' INT
+trap 'exit 143' TERM HUP
+# PIPE too: by default it would end the script without the trap's rollback. It
+# arrives when a message is written to a pipe whose reader has gone. It is
+# ignored from then on, because bash writes to that pipe again as it exits, and
+# a second PIPE trap at that point ends the script before the EXIT trap runs.
+trap 'trap "" PIPE; exit 141' PIPE
+
 cat >"$new" <<'EOF_SSHD'
 {{ include "sshd-rama.conf" -}}
 EOF_SSHD
 
-had_previous=false
 if sudo test -f "$TARGET"; then
-  had_previous=true
+  # shellcheck disable=SC2024  # The copy is this user's temporary file.
   sudo cat "$TARGET" >"$backup"
+  had_previous=true
 fi
 
-restore() {
-  if [ "$had_previous" = true ]; then
-    sudo install -m 0644 -o root -g root "$backup" "$TARGET"
-    echo "   Restored the previous $TARGET." >&2
-  else
-    sudo rm -f "$TARGET"
-    echo "   Removed $TARGET." >&2
-  fi
-}
-
 echo ">> Installing $TARGET..."
+unchecked=true
 sudo install -m 0644 -o root -g root "$new" "$TARGET"
-
-# `sshd -t` needs the privilege separation directory, which exists only once
-# systemd has made it.
-sudo mkdir -p /run/sshd
 
 if ! sudo "$SSHD" -t; then
   echo "❌ sshd -t rejects the configuration with the new drop-in." >&2
-  restore
   exit 1
 fi
 
 # What sshd will use for this account, not the text of the file. Compared
 # without regard to case: sshd prints the keywords in lower case in some
 # versions and as written in the manual in others.
-effective="$(sudo "$SSHD" -T -C "user=$USER_NAME,host=client,addr=192.168.0.2")"
+if ! effective="$(sudo "$SSHD" -T -C "user=$USER_NAME,host=client,addr=192.168.0.2")"; then
+  echo "❌ sshd -T could not print the configuration with the new drop-in." >&2
+  exit 1
+fi
 wrong=()
 for want in \
   'authenticationmethods publickey' \
@@ -125,9 +191,10 @@ if [ "${#wrong[@]}" -gt 0 ]; then
   echo "❌ sshd does not report these settings with the drop-in installed:" >&2
   printf '     %s\n' "${wrong[@]}" >&2
   echo "   Another file in /etc/ssh/sshd_config.d probably sets them first." >&2
-  restore
   exit 1
 fi
+
+unchecked=false
 
 # A running sshd keeps the config it read at start. Ubuntu starts sshd from a
 # socket on the first connection, so it may not be running, and then there is
