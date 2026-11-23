@@ -17,6 +17,10 @@ configures one machine, rama. Shared dotfiles are copied between the repos,
 not templated, so a change to one operating system never needs testing on
 another.
 
+The three are worked on together in
+[dev-config](https://github.com/jcouball/dev-config), the workspace they are
+cloned into. Issues that span more than one of them are filed there.
+
 **Status: tested in a container, not yet on the machine.** The rebuild
 procedure below runs to completion in an `ubuntu:26.04` container:
 [Certify the rebuild](#certify-the-rebuild) repeats that test. See
