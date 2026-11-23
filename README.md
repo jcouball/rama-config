@@ -373,7 +373,7 @@ runs again only when its rendered content changes.
 | `before_02_set_login_shell` | Makes zsh the login shell | the script changes |
 | `before_03_vendor_apt_repositories` | Registers ten vendor apt repositories and installs their packages; adds the user to the `docker` group | the script changes |
 | `after_04_mise_install` | `mise install`, then verifies nothing declared is missing | the mise config changes |
-| `after_05_vscode_extensions` | Installs the missing extensions from `vscode-extensions.txt` | `vscode-extensions.txt` changes |
+| `after_05_vscode_extensions` | Installs the missing extensions from `vscode-extensions.txt`, trying a failed install up to three times | `vscode-extensions.txt` changes |
 | `after_06_snap_install` | Installs the missing snaps from `snap-packages.txt`; skips itself where snapd is not running | `snap-packages.txt` changes |
 | `after_07_terminal_font` | Rebuilds the font cache and sets the Ptyxis font to MesloLGS NF; fails outside a desktop session, so a later apply retries | the script changes |
 | `after_08_hide_zfs_member` | Installs a udev rule that makes udisks ignore ZFS pool members, so the dock and Files stop listing the root pool as an unmountable `rpool` volume; skips the reload where udevd is not running | the script changes |

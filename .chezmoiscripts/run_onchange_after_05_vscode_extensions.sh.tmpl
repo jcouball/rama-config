@@ -5,8 +5,19 @@
 # The list is embedded below, so editing vscode-extensions.txt changes this
 # script and run_onchange_ re-runs it. Extensions already installed are left
 # alone; topgrade's `vscode` step upgrades them.
+#
+# A failed install is tried again. Each extension is its own request to the
+# marketplace, and one 503 among 49 would otherwise fail the script, stop the
+# apply, and leave every later script unrun.
 
 set -euo pipefail
+
+# How many times to try one extension, and how long to wait after each failed
+# attempt but the last, in seconds. Any failure is retried: `code` exits the
+# same way for a marketplace error as for a name that does not exist, so an
+# extension that does not exist costs the pauses once and then fails.
+ATTEMPTS=3
+PAUSES=(5 15)
 
 command -v code >/dev/null 2>&1 || {
   echo "❌ 'code' is not installed. Script 03 installs it from Microsoft's apt repository." >&2
@@ -33,7 +44,28 @@ for extension in "${wanted[@]}"; do
     continue
   fi
   echo ">> Installing VS Code extension: $extension"
-  code --install-extension "$extension" >/dev/null || failed+=("$extension")
+  attempt=1
+  done_ok=false
+  while :; do
+    if code --install-extension "$extension" >/dev/null; then
+      done_ok=true
+      break
+    fi
+    [ "$attempt" -lt "$ATTEMPTS" ] || break
+    # The pause after this attempt. With more attempts than pauses, the last
+    # pause is used again.
+    index=$((attempt - 1))
+    [ "$index" -lt "${#PAUSES[@]}" ] || index=$((${#PAUSES[@]} - 1))
+    pause="${PAUSES[$index]}"
+    attempt=$((attempt + 1))
+    echo ">> Installing VS Code extension: $extension failed; trying again in ${pause}s (attempt $attempt of $ATTEMPTS)"
+    sleep "$pause"
+  done
+  if [ "$done_ok" = false ]; then
+    failed+=("$extension")
+  elif [ "$attempt" -gt 1 ]; then
+    echo ">> Installed $extension on attempt $attempt."
+  fi
 done
 
 if [ "${#failed[@]}" -gt 0 ]; then
