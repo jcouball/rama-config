@@ -124,6 +124,12 @@ Run `sudo -v` first and never `sudo chezmoi apply`: chezmoi would write
 root-owned files into the home directory. The scripts call `sudo` themselves
 where they need it.
 
+If the apply stops because a download failed, run it again:
+`sudo -v && chezmoi apply`. Every script is written to be run again, and a
+download fails for reasons that have nothing to do with this repo: a 503 from
+GitHub stopped a certification run on 2026-11-23, and the next run passed
+unchanged.
+
 Afterwards, by hand:
 
 1. Give the machines that will drive rama the key: see
@@ -861,16 +867,17 @@ Clean-machine result: 52 passed, 0 failed, 0 warnings, 6 excluded
 Real-hardware result: 63 passed, 0 failed, 0 warnings, 0 excluded
 
 Machine:      container, ubuntu:26.04, x86_64
-Host:         rama, Ubuntu 26.04 LTS
+Host:         rama, Ubuntu 26.10
 Built from:   main
 Tree:         <the tree of the commit>
 ```
 
 A tag that exists always means both halves: the rebuild in a clean machine,
 and `verify.sh` on rama with the same commit applied. `Machine` says what the
-clean machine was. While it is a container, the six things under "What a pass
-does not cover" were checked on rama alone, and the tag says so by naming the
-container.
+clean machine was, and `Host` what rama runs. They are not the same release
+today: the container is `ubuntu:26.04` and rama runs 26.10. While the clean
+machine is a container, the six things under "What a pass does not cover" were
+checked on rama alone, and the tag says so by naming the container.
 
 What changed between two certifications is in the commits between their tags:
 `git log <older tag>..<newer tag>`. A tag has one more line, `Triggered by:`,
