@@ -129,7 +129,9 @@ on_exit() {
         # The copy is the only way back, so it is not deleted below.
         keep_backup=true
         echo "   The previous file is kept at $backup. Put it back by hand:" >&2
-        echo "     sudo install -m 0644 -o root -g root $backup $TARGET" >&2
+        # %q, so the command can be pasted whatever the path is: mktemp puts
+        # the copy under TMPDIR, which may have a space in it.
+        printf '     sudo install -m 0644 -o root -g root %q %q\n' "$backup" "$TARGET" >&2
       else
         echo "   There was no previous file. Remove the new one by hand:" >&2
         echo "     sudo rm $TARGET" >&2
