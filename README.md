@@ -104,8 +104,11 @@ sudo apt-get update && sudo apt-get install -y curl git
 
 # 2. Everything else.
 sudo -v && sh -c "$(curl -fsLS get.chezmoi.io)" -- -b /tmp/chezmoi-bootstrap \
-  init --apply jcouball/ubuntu-dev-config
+  init --apply --branch stable jcouball/ubuntu-dev-config
 ```
+
+`stable` is the branch that holds the last certified commit;
+[Main and stable](#main-and-stable) says how it moves.
 
 Step 2 downloads a temporary copy of chezmoi and runs it. It asks what the
 machine is called, then installs the apt packages, changes the login shell to
@@ -135,6 +138,17 @@ Afterwards, by hand:
 8. In Warp, set Terminal font to `MesloLGS NF` under Settings > Appearance >
    Text. Warp does not sync or restore the setting, and script
    `after_07_terminal_font` sets the font only for Ptyxis.
+
+The rebuilt machine's chezmoi source is on `stable`, because that is what the
+command above cloned. Leave it there until the configuration is next changed
+on rama, or a certification is to be run. Then put the source on `main`, which
+is where rama's source normally is:
+
+```bash
+chezmoi git -- fetch origin && chezmoi git -- switch main && sudo -v && chezmoi update
+```
+
+[Main and stable](#main-and-stable) says why.
 
 ## What installs what
 
@@ -389,10 +403,16 @@ a new `chezmoi init` does not have. After a rebuild, set it up again with a new
 key and delete the old one from GitHub. The key is not in 1Password: it is
 useful on rama alone, and making a new one takes less time than restoring it.
 
-**What the key can do.** Read this repo, and push to it: create, move and
-delete tags, and branches other than `main`. It cannot change `main`, which
-takes changes only through a pull request, and it opens nothing in any other
-repo.
+**What the key can do.** Read this repo, and push to it. What it is for is
+the two things `record.sh` pushes: a new `certified/` tag, and `stable` moved
+forward. It can also create, move and delete any other tag, and any branch
+other than `main` and `stable`. It cannot change `main`, which takes changes
+only through a pull request. It cannot move or delete a `certified/` tag, or
+delete `stable` or move it backwards: rulesets stop both, for everyone. It
+opens nothing in any other repo.
+
+So a stolen key could move `stable` forward to a commit of its own making, and
+a rebuild would then clone that commit.
 
 ### Set up the deploy key
 
@@ -475,12 +495,20 @@ directory, or the key file itself has been somewhere it should not be.
 2. **Look for pushes you did not make.** The repo's
    [Activity](https://github.com/jcouball/ubuntu-dev-config/activity) page
    lists every push, including branches and tags that were created or deleted.
-   `main` cannot have been changed. A tag can have been moved or deleted, so
-   compare the tags with what you expect:
+   `main` cannot have been changed, and no `certified/` tag can have been
+   moved or deleted. `stable` can have been moved forward, and a new tag
+   made. Check that `stable` is a commit of `main` with a `certified/` tag you
+   made:
 
    ```bash
+   git fetch origin
+   git merge-base --is-ancestor origin/stable origin/main && echo "stable is on main"
+   git tag --points-at origin/stable
    git ls-remote --tags origin
    ```
+
+   If `stable` is somewhere it should not be, do not rebuild from it. Putting
+   it back means turning its ruleset off first.
 
 3. **Make a new key**, as in [Replace the deploy key](#replace-the-deploy-key).
 4. **Find out how the key got out.** It was readable by anything that could
@@ -614,12 +642,14 @@ Certification has two scripts, as in mac-dev-config:
   in a fresh `ubuntu:26.04` container, then runs `verify.sh` in it.
 - `certification/verify.sh` checks a machine by its outcomes: what is
   installed, what is set, what resolves. It also runs on rama itself.
+- `certification/record.sh` records a certification as a tag on the commit,
+  and moves `stable` to it.
 
 ### Rebuild in a container
 
 ```bash
 ./certification/certify.sh                  # certify main
-./certification/certify.sh --branch <name>  # certify a branch before it merges
+./certification/certify.sh --branch <name>  # try a branch before it merges
 ./certification/certify.sh --keep           # leave the container for inspection
 ./certification/certify.sh --verify-only    # re-run the checks in a kept container
 ```
@@ -627,10 +657,45 @@ Certification has two scripts, as in mac-dev-config:
 It needs docker and git on the machine it runs on, and changes nothing there
 apart from pulling the image and writing logs.
 
-Run it for a change to a script under `.chezmoiscripts`, to one of the package
-lists, to `.chezmoi.toml.tmpl`, to `verify.sh`, or to anything else a rebuild
-runs or reads. Certify the change from its branch, before it merges. A run
-takes about eight minutes on rama.
+A pull request does not need a certification run to merge. It needs review, and
+whatever shows the change itself works: a script run against stand-ins, a test
+of the logic, an apply in a scratch directory. The pull request says what was
+done.
+
+Certify `main` when there is something on it that a rebuild should get. On
+rama, in the chezmoi source, with `main` applied there first:
+
+```bash
+cd "$(chezmoi source-path)"
+sudo -v && chezmoi update
+./certification/certify.sh
+```
+
+That assumes the source follows `main`. On a rama that has just been rebuilt it
+follows `stable`: see [Main and stable](#main-and-stable). A run takes about
+eight minutes on rama.
+
+**What needs a run before it reaches `stable`:** anything a rebuild runs or
+reads. That is a script under `.chezmoiscripts`, one of the package lists,
+`.chezmoi.toml.tmpl`, `.chezmoiignore`, a managed config file, and `verify.sh`.
+A tightened check counts exactly as a changed script does, because the previous
+run passed a test that no longer exists.
+
+**What does not:** the README, `CLAUDE.md` and `record.sh`. A commit that
+changes only those can sit on `main` until the next run takes it along.
+`certify.sh` is tested by the next run it makes.
+
+**One run can cover several changes.** It certifies the tip of `main`, and
+everything merged since the last tag is in that commit. When a run of several
+changes fails, the logs usually name the script. If they do not, certify the
+changes one at a time with `--branch`.
+
+**To try one change in a container before it merges**, name its branch. This
+is worth the wait for a new script, where a clean machine finds what nothing
+else does. Run it once, after review, on the commit that will merge: a new
+commit on the branch means a new run. Because the checkout has to be at the
+branch's commit, make the run from a scratch clone on rama, not from the
+chezmoi source.
 
 The container clones the repo from GitHub, as the README's command does, and
 `verify.sh` comes from the local checkout, copied at the start of the run. So
@@ -644,8 +709,9 @@ these hold:
 The transcripts go to `certification/logs/`, which git ignores:
 `bootstrap-<stamp>[-<branch>].log`, `verify-<stamp>[-<branch>].log`, and the
 copy of `verify.sh` that produced the second. The bootstrap log ends with the
-commit and the tree the container built. Put the commit and the verdict in the
-pull request.
+commit and the tree the container built, what the container was, and the
+verdict. For a branch run made before a merge, put the commit, the tree and the
+verdict in the pull request.
 
 **The verdict.** CERTIFIED needs both of:
 
@@ -660,7 +726,7 @@ runs whatever it was, because a script that exits 0 has proved nothing.
 `--verify-only` never certifies. It re-runs the checks in a container that a
 run with `--keep` left, and says whether they passed. It did not rebuild the
 container and does not know which commit it holds, so its result is for
-looking into a failure, not for the pull request.
+looking into a failure. It cannot be recorded.
 
 **What a pass does not cover.** `verify.sh` reports each of these as `SKIP`,
 and counts it as excluded:
@@ -682,7 +748,139 @@ packages are not installed, and `verify.sh` fails on them. Certify on rama.
 
 The script's header names each place it departs from the README's procedure:
 it makes a user first, because the image has only root; it answers the host
-name question with `--promptString`; and it passes `--branch` when asked to.
+name question with `--promptString`; and it always names the branch it
+clones, `main` or the one given with `--branch`, where the README's command
+names `stable`.
+
+### Main and stable
+
+A change merges to `main`. A rebuild clones `stable`. Between the two is a
+certification.
+
+| Branch | Holds | Moved by |
+| --- | --- | --- |
+| `main` | every merged change, certified or not | a pull request |
+| `stable` | the last commit that was certified | `certification/record.sh`, and nothing else |
+
+`main` is often ahead of `stable`, and that is the normal state, not a fault:
+several changes can merge and be certified together.
+
+```bash
+git fetch origin
+git log --oneline origin/stable..origin/main    # merged, not yet certified
+```
+
+rama's own chezmoi source follows `main`, not `stable`. It is the one machine
+this repo configures, so it is where the configuration is changed, and the
+second half of a certification is `verify.sh` passing on it: it has to take a
+commit before the commit can be certified. `stable` is for
+[Rebuild from nothing](#rebuild-from-nothing).
+
+A rama that has just been rebuilt is the exception: its source is on `stable`,
+which is what the rebuild cloned. `chezmoi update` there keeps following
+`stable`, and `record.sh` stops on a source that follows `stable` and says so.
+Put the source on `main` before certifying or changing anything:
+
+```bash
+chezmoi git -- fetch origin && chezmoi git -- switch main && sudo -v && chezmoi update
+```
+
+A ruleset stops `stable` being deleted or moved backwards. Nothing on GitHub
+can check that a commit pushed to it was certified. `record.sh` is what keeps
+that true: it moves `stable` only to a commit it has just tagged, in the same
+push as the tag.
+
+mac-dev-config has two machines and so two roles, one following `stable`. Its
+README describes them.
+
+### Record a run and move stable
+
+A run gives the clean-machine result only. To record it, on rama, in the
+chezmoi source:
+
+```bash
+cd "$(chezmoi source-path)"
+sudo -v && chezmoi update       # after the merge, for a branch run
+./certification/record.sh       # --dry-run shows the tag and makes nothing
+```
+
+`record.sh` reads the logs beside it, which is right for a run of `main` made
+in the chezmoi source. A branch run is made in a scratch clone, and its logs
+are there. Give that run's bootstrap log, as the end of the run prints it:
+
+```bash
+./certification/record.sh --log ~/<scratch clone>/certification/logs/bootstrap-<stamp>-<branch>.log
+```
+
+The verify log and the copy of `verify.sh` are found beside the log named.
+
+`record.sh` reads the clean-machine result from the run's logs, then stops
+unless all of these hold:
+
+- this machine is rama,
+- the run was CERTIFIED,
+- the commit to certify is on `main` and has no `certified/` tag yet,
+- `stable` is a commit of `main`,
+- its tree is the tree the clean machine built,
+- the `verify.sh` that checked the clean machine is the one at that commit,
+- the chezmoi source on rama is at that commit, with nothing uncommitted, both
+  before `verify.sh` runs and after it,
+- the tag and `stable` can be pushed from this session, and
+- `verify.sh` passes on rama with 0 warnings and 0 excluded, which is the
+  real-hardware half. A warning or an excluded check there is a check that was
+  not made.
+
+It asks for the sudo password, because `verify.sh` reads sshd's settings and
+the firewall's rules as root. So it needs a terminal: over ssh, use `ssh -t`.
+
+It then shows the tag, creates it on the commit, and pushes the tag and
+`stable` together: both arrive or neither does. The push uses the
+[deploy key](#deploy-key). It certifies the tip of `main` unless `--commit`
+names another commit, and reads the newest full run unless `--log` names
+another bootstrap log. An older commit recorded with `--commit` gets its tag
+and leaves `stable` where it is. If the trees differ, certify `main` and
+record that run.
+
+Nothing is committed, so no pull request is needed to record a certification.
+
+### The certified run
+
+Each certification is an annotated tag on the commit it certifies, named
+`certified/<date>-<short commit>`. The tag's message holds the result:
+
+```bash
+git fetch --tags
+git tag -l 'certified/*' --sort=-creatordate | head -1    # the latest
+git tag -n99 -l 'certified/*'                             # all of them, with results
+```
+
+```text
+Certified 1a2b3c4 on 2026-11-24
+
+Clean-machine result: 52 passed, 0 failed, 0 warnings, 6 excluded
+Real-hardware result: 63 passed, 0 failed, 0 warnings, 0 excluded
+
+Machine:      container, ubuntu:26.04, x86_64
+Host:         rama, Ubuntu 26.04 LTS
+Built from:   main
+Tree:         <the tree of the commit>
+```
+
+A tag that exists always means both halves: the rebuild in a clean machine,
+and `verify.sh` on rama with the same commit applied. `Machine` says what the
+clean machine was. While it is a container, the six things under "What a pass
+does not cover" were checked on rama alone, and the tag says so by naming the
+container.
+
+What changed between two certifications is in the commits between their tags:
+`git log <older tag>..<newer tag>`. A tag has one more line, `Triggered by:`,
+when `record.sh` was given `--reason "<one line>"`. That is for a trigger no
+commit records: an Ubuntu upgrade, a new image, or a second run of a commit
+that has not changed.
+
+The tags are not signed. A ruleset on `certified/*` stops one being deleted or
+moved, so a record cannot change after it is made. To correct a wrong tag,
+turn the ruleset off first, on purpose.
 
 ### Verify the machine
 
