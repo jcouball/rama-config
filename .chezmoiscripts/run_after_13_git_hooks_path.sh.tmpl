@@ -1,0 +1,31 @@
+#!/bin/bash
+#
+# Make git run the hooks in .githooks for the chezmoi source.
+#
+# The two hooks stop a commit on main or stable, and a push to stable of a
+# commit that was not certified. git does not run a versioned hook by itself:
+# a clone runs them only when its own core.hooksPath names the directory. A
+# hook that is not installed protects nothing, and the chezmoi source is the
+# clone record.sh pushes from, and the one that has stable checked out after
+# a rebuild.
+#
+# run_ rather than run_onchange_, so it runs on every apply. chezmoi remembers
+# an onchange script as done in its own state, not in the clone. A source that
+# was cloned again would then have no hooks, and nothing would set them until
+# this file changed. One `git config` read on each apply costs nothing.
+#
+# A working clone gets the same setting from clone-repos.sh in
+# jcouball/dev-config.
+
+set -euo pipefail
+
+SOURCE={{ .chezmoi.workingTree | quote }}
+
+[ -d "$SOURCE/.githooks" ] || { echo "❌ $SOURCE/.githooks not found." >&2; exit 1; }
+
+if [ "$(git -C "$SOURCE" config --local --get core.hooksPath || true)" = ".githooks" ]; then
+  exit 0
+fi
+
+echo ">> Setting core.hooksPath to .githooks in $SOURCE"
+git -C "$SOURCE" config --local core.hooksPath .githooks
