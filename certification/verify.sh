@@ -142,7 +142,12 @@ if command -v chezmoi >/dev/null 2>&1; then
 
   # A file that differs shows here, and so does a run_onchange_ script that has
   # not succeeded: chezmoi lists it as still to run.
-  status_out="$(chezmoi status 2>&1)"
+  #
+  # Always-run scripts are excluded: script 13 is pending after every apply, so
+  # it would read as drift on a clean machine. The flag is passed here, although
+  # .chezmoi.toml.tmpl sets the same thing, so this check does not depend on the
+  # machine's config having been regenerated.
+  status_out="$(chezmoi status --exclude=always 2>&1)"
   status_exit=$?
   if [ "$status_exit" -ne 0 ]; then
     bad "chezmoi status failed (exit $status_exit)" "$(printf '%s' "$status_out" | head -3 | tr '\n' ' ')"
@@ -162,6 +167,24 @@ elif [ -d "$SRC/.git" ]; then
 else
   bad "chezmoi source directory missing or not a git checkout" "$SRC"
 fi
+
+# The hooks that stop a commit on main or stable, and a push to stable of a
+# commit that was not certified. git runs a versioned hook only when the
+# clone's own config points at it, which script 13 sees to. --local, because
+# a core.hooksPath in ~/.gitconfig would say nothing about this clone.
+hooks_path="$(git -C "$SRC" config --local --get core.hooksPath 2>/dev/null || true)"
+if [ "$hooks_path" = ".githooks" ]; then
+  ok "chezmoi source runs the hooks in .githooks"
+else
+  bad "core.hooksPath in the chezmoi source is '${hooks_path:-unset}', not .githooks" "script 13 sets it"
+fi
+for hook in pre-commit pre-push; do
+  if [ -x "$SRC/.githooks/$hook" ]; then
+    ok ".githooks/$hook is executable"
+  else
+    bad ".githooks/$hook is missing or not executable" "git skips a hook it cannot run"
+  fi
+done
 
 # --- Managed files landed --------------------------------------------------
 

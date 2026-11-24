@@ -523,8 +523,9 @@ directory, or the key file itself has been somewhere it should not be.
 
 ## Scripts
 
-chezmoi runs these in order during `chezmoi apply`. Each is `run_onchange_`: it
-runs again only when its rendered content changes.
+chezmoi runs these in order during `chezmoi apply`. All but the last are
+`run_onchange_`: each runs again only when its rendered content changes.
+Script 13 is `run_`, and runs on every apply.
 
 | Script | What it does | Re-runs when |
 | --- | --- | --- |
@@ -541,6 +542,7 @@ runs again only when its rendered content changes.
 | `after_10_firewall` | Blocks inbound connections with ufw, adds the rules in `ufw-rules.txt`, and enables the firewall; skips itself where ufw cannot run | `ufw-rules.txt` changes |
 | `after_11_dock` | Sets the dock's pinned launchers to `dock-favorites.txt` and its settings to `dock-settings.txt`, resetting every other dock setting to its default; fails outside a desktop session, so a later apply retries | either list changes |
 | `after_12_mouse_scroll` | Turns on natural scrolling for the mouse wheel; skips itself where GNOME is not installed, and fails outside a desktop session, so a later apply retries | the script changes |
+| `after_13_git_hooks_path` | Sets `core.hooksPath` to `.githooks` in the chezmoi source, so git runs [the hooks](#the-hooks) there | every apply |
 
 `before_` scripts run before chezmoi writes any file; `after_` scripts run
 after, because script 04 reads `~/.config/mise/config.toml` and script 09
@@ -798,6 +800,31 @@ push as the tag.
 
 mac-dev-config has two machines and so two roles, one following `stable`. Its
 README describes them.
+
+#### The hooks
+
+That leaves one accident GitHub accepts: a commit made in a source that has
+`stable` checked out, as a rama that has just been rebuilt does, and then
+pushed. Two git hooks in `.githooks/` stop it in the clone. They are the same
+two as in mac-dev-config:
+
+| Hook | Stops | Lets through |
+| --- | --- | --- |
+| `pre-commit` | a commit while `main` or `stable` is checked out | any other branch, and a detached `HEAD`, which is what a rebase commits with |
+| `pre-push` | a push to `stable`, from any local branch, of a commit with no `certified/` tag | a commit that has the tag in this clone or gets it in the same push, which is what `record.sh` pushes |
+
+git runs a versioned hook only in a clone whose `core.hooksPath` names the
+directory. Script 13 sets that in the chezmoi source on every apply, and
+`verify.sh` checks it. `clone-repos.sh` in
+[dev-config](https://github.com/jcouball/dev-config) sets it in a working
+clone. In any other clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+The hooks are a guard against accidents, not a control. Each lives in one
+clone, and `--no-verify` skips it. The rulesets are the control.
 
 ### Record a run and move stable
 
