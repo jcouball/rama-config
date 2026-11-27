@@ -124,6 +124,19 @@ add_repository docker \
   https://download.docker.com/linux/ubuntu "$UBUNTU_RELEASE" \
   9DC858229FC7DD38854AE2D88D81803C0EBFCD88 stable
 
+# Tailscale, which puts rama on the tailnet so it can be reached from outside
+# the LAN. Tailscale names its suites, and the file its key is in, after the
+# Ubuntu release.
+#
+# Tailscale's own install script, which is how rama first got it, writes
+# tailscale.list with the key in /usr/share/keyrings. Left beside this
+# definition, that is one repository defined twice with two key files, and apt
+# refuses to update. So the old file goes.
+sudo rm -f /etc/apt/sources.list.d/tailscale.list
+add_repository tailscale \
+  "https://pkgs.tailscale.com/stable/ubuntu/$UBUNTU_RELEASE.noarmor.gpg" tailscale-archive-keyring.gpg \
+  https://pkgs.tailscale.com/stable/ubuntu "$UBUNTU_RELEASE"
+
 packages=(
   code
   gh
@@ -137,6 +150,7 @@ packages=(
   containerd.io
   docker-buildx-plugin
   docker-compose-plugin
+  tailscale
 )
 
 # Chrome, Slack, and the 1Password desktop app are published for amd64 only.
@@ -179,6 +193,50 @@ sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-upgrade "${packages[
 if ! id -nG | tr ' ' '\n' | grep -qx docker; then
   echo ">> Adding $(id -un) to the docker group..."
   sudo usermod -aG docker "$(id -un)"
+fi
+
+# The tailscale package enables tailscaled, which starts at boot, before
+# anyone logs in. This covers the case where it did not, or where the service
+# has since been disabled or stopped. Both are checked: a service that is
+# running and not enabled is on the tailnet now and off it after the next
+# restart. Skipped where systemd is not running, such as a container.
+#
+# Signing in is not done here: it needs a person and a browser. The script
+# says so while rama is signed out, says when Tailscale is disconnected or in
+# some other state, and does not fail the apply over any of those.
+# `|| true`: under pipefail a `tailscale status` that fails would end the
+# script at the assignment.
+if [ -d /run/systemd/system ]; then
+  if ! systemctl is-enabled --quiet tailscaled 2>/dev/null \
+      || ! systemctl is-active --quiet tailscaled; then
+    echo ">> Enabling tailscaled..."
+    sudo systemctl enable --now tailscaled
+  fi
+
+  tailscale_state=""
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    tailscale_state="$(tailscale status --json 2>/dev/null \
+      | sed -n 's/^[[:space:]]*"BackendState":[[:space:]]*"\([^"]*\)".*/\1/p' | head -1 || true)"
+    [ -n "$tailscale_state" ] && break
+    sleep 1
+  done
+  if [ -z "$tailscale_state" ]; then
+    echo "❌ tailscaled is running and does not answer 'tailscale status'." >&2
+    echo "   Look at:  systemctl status tailscaled" >&2
+    exit 1
+  elif [ "$tailscale_state" = "NeedsLogin" ]; then
+    echo "!! Tailscale is not signed in on this machine." >&2
+    echo "!! Sign in, and approve the address it prints in a browser:" >&2
+    echo "!!   sudo tailscale up" >&2
+    echo "!! Then turn off key expiry for this machine in the admin console." >&2
+  elif [ "$tailscale_state" = "Stopped" ]; then
+    # Disconnected with `tailscale down`. It connects again with no browser.
+    echo "!! Tailscale is disconnected on this machine, so it is off the tailnet." >&2
+    echo "!! Connect it:  sudo tailscale up" >&2
+  elif [ "$tailscale_state" != "Running" ]; then
+    echo "!! Tailscale is in state '$tailscale_state', not Running." >&2
+    echo "!! If it stays there, look at:  tailscale status" >&2
+  fi
 fi
 
 echo ">> Vendor packages installed."

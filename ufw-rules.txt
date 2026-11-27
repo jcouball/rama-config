@@ -10,9 +10,14 @@
 # rule. A port Docker publishes is reachable whatever is listed here: see
 # "Remote access over SSH" in the README.
 #
+# THE TAILNET IS NOT FILTERED BY THESE RULES. Tailscale puts its own
+# packet-filter rules ahead of ufw's and accepts what arrives on tailscale0, so
+# a machine on the tailnet reaches every port rama listens on, and port 22 with
+# no rule here. See "Tailscale" in the README.
+#
 # No quoting: a line is split on spaces, so `comment '...'` does not work.
 
-# SSH, from the LAN only. 192.168.0.0/16 is the home network. fe80::/10 is
+# SSH, from the LAN. 192.168.0.0/16 is the home network. fe80::/10 is
 # IPv6 link-local, which never crosses a router, for a client that reaches
 # rama.local over IPv6.
 allow from 192.168.0.0/16 to any port 22 proto tcp

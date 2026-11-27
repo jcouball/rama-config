@@ -134,14 +134,16 @@ Afterwards, by hand:
 
 1. Give the machines that will drive rama the key: see
    [Set up a client](#set-up-a-client).
-2. Log out and back in so the login shell change and the `docker` group
+2. Sign in to Tailscale, so rama can be reached from outside the LAN: see
+   [Tailscale](#tailscale).
+3. Log out and back in so the login shell change and the `docker` group
    membership take effect.
-3. Log into 1Password.
-4. Sign in to mail in Thunderbird, and set View > Layout to Classic View.
-5. Run `claude` and `gh auth login` to sign in to each.
-6. Sign in to VS Code with GitHub and turn on Settings Sync.
-7. Sign in to Telegram: scan its QR code from the phone app.
-8. In Warp, set Terminal font to `MesloLGS NF` under Settings > Appearance >
+4. Log into 1Password.
+5. Sign in to mail in Thunderbird, and set View > Layout to Classic View.
+6. Run `claude` and `gh auth login` to sign in to each.
+7. Sign in to VS Code with GitHub and turn on Settings Sync.
+8. Sign in to Telegram: scan its QR code from the phone app.
+9. In Warp, set Terminal font to `MesloLGS NF` under Settings > Appearance >
    Text. Warp does not sync or restore the setting, and script
    `after_07_terminal_font` sets the font only for Ptyxis.
 
@@ -161,7 +163,7 @@ chezmoi git -- fetch origin && chezmoi git -- switch main && sudo -v && chezmoi 
 | What | Source | Declared in |
 | --- | --- | --- |
 | Compilers, libraries, services, zsh, sshd, and every tool Ubuntu carries | apt, Ubuntu archive | [apt-packages.txt](apt-packages.txt) |
-| VS Code, `gh`, the 1Password app and CLI, Claude Code, mise, Chrome, Slack, Warp, Typora, Docker Engine | apt, vendor repositories | script `before_03_vendor_apt_repositories` |
+| VS Code, `gh`, the 1Password app and CLI, Claude Code, mise, Chrome, Slack, Warp, Typora, Docker Engine, Tailscale | apt, vendor repositories | script `before_03_vendor_apt_repositories` |
 | Ruby, Node, Python, Go, Rust | mise | [dot_config/mise/config.toml](dot_config/mise/config.toml) |
 | Command-line tools with no apt package, including chezmoi and topgrade | mise | the same file |
 | VS Code extensions | `code --install-extension` | [vscode-extensions.txt](vscode-extensions.txt) |
@@ -185,6 +187,7 @@ chezmoi git -- fetch origin && chezmoi git -- switch main && sudo -v && chezmoi 
 | `warp-terminal` | Not in the archive |
 | `typora` | Not in the archive |
 | `docker-ce` and its plugins | The archive has `docker.io`, Ubuntu's own build; Docker's repository has Docker's releases and the Compose and Buildx plugins |
+| `tailscale` | Not in the archive |
 | `google-chrome-stable` | Not in the archive |
 | `slack-desktop` | Not in the archive |
 
@@ -195,7 +198,7 @@ releases with major regressions. To switch, change the URI and suite in script
 03 from `latest` to `stable`.
 
 The script checks the Claude Code and Docker signing keys against the
-fingerprints Anthropic and Docker document. The other eight keys are fetched
+fingerprints Anthropic and Docker document. The other nine keys are fetched
 over HTTPS from the vendor, as each vendor's own instructions do.
 
 The 1Password app, Chrome, and Slack are published for amd64 only. The script
@@ -253,7 +256,8 @@ directly and applies a project's own `mise.toml` or `.tool-versions` on `cd`.
 
 ## Remote access over SSH
 
-Other machines on the LAN run commands and tests on rama over ssh. A session
+Other machines on the LAN or the tailnet run commands and tests on rama over
+ssh. A session
 logs in as `james`, who has sudo and is in the `docker` group, so a login is
 close to root access. Three things limit who gets one, the same three
 [windows-dev-config](https://github.com/jcouball/windows-dev-config) uses:
@@ -265,9 +269,11 @@ close to root access. Three things limit who gets one, the same three
   [private_dot_ssh/private_authorized_keys](private_dot_ssh/private_authorized_keys).
   Each line must start with `restrict` or `restrict,pty`; script 09 fails the
   apply on any other.
-- **LAN only.** ufw blocks every inbound connection except the rules in
-  [ufw-rules.txt](ufw-rules.txt), which allow port 22 from `192.168.0.0/16`
-  and from IPv6 link-local addresses.
+- **LAN and tailnet only.** ufw blocks every inbound connection except the
+  rules in [ufw-rules.txt](ufw-rules.txt), which allow port 22 from
+  `192.168.0.0/16` and from IPv6 link-local addresses. A machine on the tailnet
+  reaches port 22 with no rule, because ufw does not filter the tailnet: see
+  [Tailscale](#tailscale).
 
 Forwarding is off: `DisableForwarding yes` covers ports, the agent, X11, and
 tunnels, and no key option can turn it back on. Use `scp` or `sftp` to move
@@ -283,10 +289,52 @@ packet-filter rules, which run ahead of ufw's, so `docker run -p 8080:80` is
 reachable from the network whatever `ufw-rules.txt` says. To keep a container
 private, publish it on the loopback address: `-p 127.0.0.1:8080:80`.
 
-**The firewall blocks everything else inbound.** A dev server or Redis on
-rama is unreachable from another machine until it has a rule: see
-[Open a port](#open-a-port). Connections from rama to itself, outbound
-connections, ping, and `rama.local` name lookups need no rule.
+**The firewall blocks everything else inbound from the LAN.** A dev server or
+Redis on rama is unreachable from another machine on the LAN until it has a
+rule: see [Open a port](#open-a-port). Connections from rama to itself,
+outbound connections, ping, and `rama.local` name lookups need no rule.
+
+### Tailscale
+
+rama is on a tailnet, the Tailscale network the other machines are signed in
+to, and has a name there: `rama`. That is what makes `ssh rama` work from
+outside the LAN. Script 03 registers Tailscale's apt repository and installs
+the package. The package enables `tailscaled`, which starts at boot, so rama is
+back on the tailnet after a restart with nobody logged in.
+
+**Signing in is done by hand, once.** It needs a browser:
+
+```bash
+sudo tailscale up
+```
+
+Open the address it prints on any machine and approve the login. Then, in the
+[admin console](https://login.tailscale.com/admin/machines), turn off key
+expiry for rama. With it on, rama leaves the tailnet after 180 days and has to
+be signed in again at its console. Script 03 says when rama is signed out, and
+`verify.sh` fails on it.
+
+A rebuilt rama comes back as a new machine. Delete the old entry in the admin
+console first, or the new one is named `rama-1` and `ssh rama` reaches nothing.
+
+**ufw does not filter the tailnet.** Tailscale adds its own packet-filter
+rules, ahead of ufw's, that accept what arrives on its interface,
+`tailscale0`. So a machine on the tailnet reaches every port rama listens on,
+whatever `ufw-rules.txt` says, the same way a port Docker publishes is
+reachable. Tested on 2026-11-26 with a listener on port 8099 and no rule for
+it: reachable from Neuromancer and from sophon over the tailnet, blocked from
+sophon over the LAN.
+
+What limits the tailnet is who is on it. Only machines signed in to this
+tailnet can send anything, and the tailnet's access rules, in the admin
+console, say which of them may reach which ports. Those rules are not managed
+here, and by default they allow everything. To keep a service off the tailnet,
+bind it to the loopback address or to rama's LAN address.
+
+**Check a machine that has restarted with `ssh <name> hostname`, not
+`tailscale ping`.** From the Mac app, `tailscale ping` to a machine that has
+just restarted fails until some other connection is made to it:
+[dev-config#7](https://github.com/jcouball/dev-config/issues/7).
 
 ### Set up a client
 
@@ -309,7 +357,7 @@ it out elsewhere.
 
 ```
 Host rama
-  HostName rama.local
+  HostName rama
   User james
   IdentityFile ~/.ssh/id_ed25519_rama
   IdentitiesOnly yes
@@ -317,6 +365,11 @@ Host rama
   AddKeysToAgent yes
   UseKeychain yes
 ```
+
+`rama` is the name rama has on the tailnet, so the block works from anywhere
+the client has a network. It needs Tailscale running on the client and on
+rama: see [Tailscale](#tailscale). With it off at either end, name the LAN
+address from a client on the LAN: `ssh -o HostName=rama.local rama`.
 
 Check from the client: `ssh rama 'ruby -v'` prints mise's Ruby.
 
@@ -366,6 +419,8 @@ allow from 192.168.0.0/16 to any port 3000 proto tcp
 
 `sudo ufw status` shows the rules in force. For a port needed once, run `sudo
 ufw allow ...` by hand and delete the rule afterwards.
+
+A machine on the tailnet needs no rule: see [Tailscale](#tailscale).
 
 ### Close a port
 
@@ -532,7 +587,7 @@ Script 13 is `run_`, and runs on every apply.
 | `before_00_set_host_name` | `hostnamectl set-hostname`, and fixes `/etc/hosts` | the host name answer changes |
 | `before_01_apt_install` | Installs the missing packages from `apt-packages.txt`, upgrading none; checks sshd is running | `apt-packages.txt` changes |
 | `before_02_set_login_shell` | Makes zsh the login shell | the script changes |
-| `before_03_vendor_apt_repositories` | Registers ten vendor apt repositories and installs their packages; adds the user to the `docker` group | the script changes |
+| `before_03_vendor_apt_repositories` | Registers eleven vendor apt repositories and installs their packages; adds the user to the `docker` group; checks tailscaled is running, and says when Tailscale is not signed in | the script changes |
 | `after_04_mise_install` | `mise install`, then verifies nothing declared is missing | the mise config changes |
 | `after_05_vscode_extensions` | Installs the missing extensions from `vscode-extensions.txt`, trying a failed install up to three times | `vscode-extensions.txt` changes |
 | `after_06_snap_install` | Installs the missing snaps from `snap-packages.txt`; skips itself where snapd is not running | `snap-packages.txt` changes |
@@ -951,6 +1006,8 @@ failed.
 | Claude Code | Homebrew cask | Anthropic's apt repository |
 | 1Password, Chrome, Slack, Warp, Typora | Homebrew casks | each vendor's apt repository |
 | Docker | Docker Desktop, a Homebrew cask | Docker Engine, from Docker's apt repository |
+| Tailscale | the app on a MacBook, the daemon from a Homebrew formula on a Mac with no battery | the package from Tailscale's apt repository |
+| What limits ssh to the LAN and the tailnet | sshd's `AllowUsers` | ufw for the LAN; the tailnet is not filtered |
 | `PATH` setup | `.zprofile` | `.zshenv`, because of ssh |
 
 Not carried over, because they are macOS-only:
