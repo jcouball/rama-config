@@ -612,6 +612,48 @@ else
   fi
 fi
 
+# --- Tailscale -------------------------------------------------------------
+
+section "Tailscale"
+
+# Tailscale's install script writes tailscale.list. Script 03 removes it and
+# registers tailscale.sources. Both at once is one repository defined twice
+# with two key files, and apt refuses to update.
+if [ -e /etc/apt/sources.list.d/tailscale.list ]; then
+  bad "/etc/apt/sources.list.d/tailscale.list is present" "Tailscale's install script wrote it; script 03 removes it and registers tailscale.sources"
+else
+  ok "Tailscale's apt repository is defined once"
+fi
+
+if ! command -v tailscale >/dev/null 2>&1; then
+  bad "tailscale not installed" "script 03 installs it"
+elif [ "$HAS_SYSTEMD" -eq 0 ]; then
+  excluded "tailscaled running and signed in not verified" "systemd is not running here"
+else
+  if systemctl is-enabled --quiet tailscaled 2>/dev/null; then
+    ok "tailscaled is enabled, so it starts at boot"
+  else
+    bad "tailscaled is not enabled" "sudo systemctl enable --now tailscaled"
+  fi
+  if systemctl is-active --quiet tailscaled; then
+    ok "tailscaled is running"
+  else
+    bad "tailscaled is not running" "sudo systemctl enable --now tailscaled"
+  fi
+
+  # Signing in needs a person and a browser, so no rebuild does it. A machine
+  # with systemd is a real one, and a real one that is signed out has a step
+  # left to do.
+  ts_state="$(tailscale status --json 2>/dev/null \
+               | sed -n 's/^[[:space:]]*"BackendState":[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
+  case "$ts_state" in
+    Running)    ok "Tailscale is signed in and running" ;;
+    NeedsLogin) bad "Tailscale is not signed in" "sudo tailscale up" ;;
+    "")         bad "tailscaled does not answer 'tailscale status'" "systemctl status tailscaled" ;;
+    *)          bad "Tailscale is in state '$ts_state', not Running" "sudo tailscale up" ;;
+  esac
+fi
+
 # --- udev ------------------------------------------------------------------
 
 section "udev"

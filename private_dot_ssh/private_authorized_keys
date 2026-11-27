@@ -14,8 +14,8 @@
 # There is one key for rama, id_ed25519_rama, and every client holds a copy.
 # It is used for rama alone. Each copy of the private key has a passphrase,
 # which is what makes a copied key file useless. No from= address restriction:
-# the firewall already limits logins to the LAN, and from= would lock a client
-# out whenever its address changed.
+# the firewall already limits logins to the LAN and the tailnet, and from=
+# would lock a client out whenever its address changed.
 #
 # README.md, "Set up a client", has the steps for a new client, and "Replace
 # the key" the steps for a new key.
