@@ -373,6 +373,24 @@ address from a client on the LAN: `ssh -o HostName=rama.local rama`.
 
 Check from the client: `ssh rama 'ruby -v'` prints mise's Ruby.
 
+### Connect from rama to another machine
+
+rama's own `~/.ssh/config` has a `Host` block for each of the other machines:
+`neuromancer`, `cortex` and `sophon`. Each names the key that opens that
+machine, `~/.ssh/id_ed25519_<machine>`, and offers no other.
+
+rama holds none of those keys. The private keys are kept on Neuromancer, so
+`ssh cortex` from rama is refused until a copy of `id_ed25519_cortex` is put
+at that path:
+
+```bash
+scp ~/.ssh/id_ed25519_cortex rama:.ssh/     # on Neuromancer
+ssh rama 'chmod 600 ~/.ssh/id_ed25519_cortex'
+```
+
+Remove the copy from rama when the work is done. The blocks use the tailnet
+names, so Tailscale has to be running on rama and on the other machine.
+
 ### Replace the key
 
 Every client shares the one key, so replacing it locks all of them out until
